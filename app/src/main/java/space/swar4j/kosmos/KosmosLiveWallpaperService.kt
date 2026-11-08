@@ -116,7 +116,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             }
         }
 
-        @OptIn(UnstableApi::class)
+        @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
         private fun startVideo(file: File) {
             val exo = runCatching {
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService).build()

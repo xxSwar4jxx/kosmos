@@ -3,6 +3,7 @@ package space.swar4j.kosmos
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
+import androidx.core.content.edit
 import android.content.Intent
 import java.io.File
 
@@ -19,9 +20,7 @@ class LiveWallpaperLauncher(context: Context) {
         }
 
         appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-            .edit()
-            .putString(ACTIVE_WALLPAPER_PATH, safeFile.absolutePath)
-            .apply()
+            .edit { putString(ACTIVE_WALLPAPER_PATH, safeFile.absolutePath) }
 
         val component = ComponentName(appContext, KosmosLiveWallpaperService::class.java)
         val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {

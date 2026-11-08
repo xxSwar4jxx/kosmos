@@ -2,6 +2,7 @@ package space.swar4j.kosmos
 
 import android.content.Context
 import android.graphics.Bitmap
+import androidx.core.graphics.createBitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
@@ -195,7 +196,7 @@ class WallpaperStorage(private val context: Context) {
     private fun createPreset(file: File, preset: Preset) {
         val width = PRESET_WIDTH
         val height = PRESET_HEIGHT
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val background = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
@@ -390,7 +391,7 @@ class WallpaperStorage(private val context: Context) {
         @Suppress("DEPRECATION")
         val movie = Movie.decodeFile(file.absolutePath) ?: return null
         val scale = minOf(1f, THUMBNAIL_WIDTH.toFloat() / movie.width(), THUMBNAIL_HEIGHT.toFloat() / movie.height())
-        val frame = Bitmap.createBitmap(
+        val frame = createBitmap(
             (movie.width() * scale).toInt().coerceAtLeast(1),
             (movie.height() * scale).toInt().coerceAtLeast(1),
             Bitmap.Config.ARGB_8888
