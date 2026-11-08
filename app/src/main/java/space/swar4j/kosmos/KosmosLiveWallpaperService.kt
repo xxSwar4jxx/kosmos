@@ -183,7 +183,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     (width * scale).toInt().coerceAtLeast(1),
                     (height * scale).toInt().coerceAtLeast(1)
                 )
-                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
             }
             return decoded as? AnimatedImageDrawable
                 ?: throw IOException("The selected GIF is not animated or is unsupported")
