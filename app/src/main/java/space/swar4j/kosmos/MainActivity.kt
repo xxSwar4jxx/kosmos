@@ -58,11 +58,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -110,7 +112,20 @@ private fun KosmosScreen(
     onThemeChange: (Boolean) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        val preferences = context.getSharedPreferences(LiveWallpaperLauncher.PREFERENCES, android.content.Context.MODE_PRIVATE)
+        while (true) {
+            delay(750)
+            val failure = preferences.getString(LiveWallpaperLauncher.PLAYBACK_ERROR, null)
+            if (!failure.isNullOrBlank()) {
+                preferences.edit { remove(LiveWallpaperLauncher.PLAYBACK_ERROR) }
+                snackbarHostState.showSnackbar("Live wallpaper failed: $failure")
+            }
+        }
+    }
     var wallpapers by remember { mutableStateOf<List<StoredWallpaper>>(emptyList()) }
     var catalogItems by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
     var selectedWallpaper by remember { mutableStateOf<StoredWallpaper?>(null) }
