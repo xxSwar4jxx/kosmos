@@ -22,7 +22,7 @@ class StaticWallpaperApplier(context: Context) {
             val safeFile = runCatching { file.canonicalFile }.getOrNull()
             if (safeFile == null || !safeFile.isFile || !safeFile.canRead() ||
                 safeFile.parentFile != wallpaperDirectory ||
-                safeFile.extension.lowercase() !in setOf("jpg", "png", "webp")) {
+                safeFile.extension.lowercase() !in setOf("jpg", "png", "webp", "gif")) {
                 throw IOException("The wallpaper file is unavailable")
             }
 
