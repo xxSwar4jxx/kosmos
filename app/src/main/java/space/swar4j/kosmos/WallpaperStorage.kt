@@ -135,7 +135,7 @@ class WallpaperStorage(private val context: Context) {
                             (info.size.width * scale).toInt().coerceAtLeast(1),
                             (info.size.height * scale).toInt().coerceAtLeast(1)
                         )
-                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                        decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
                     }
                     if (drawable !is AnimatedImageDrawable) {
                         throw IOException("The selected GIF is not animated or is unsupported")
