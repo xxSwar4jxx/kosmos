@@ -4,6 +4,9 @@ import android.annotation.SuppressLint
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Movie
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Typeface
 import android.graphics.ImageDecoder
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -44,6 +47,12 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private var surfaceWidth = 0
         private var surfaceHeight = 0
         private var playbackGeneration = 0
+        private var fallbackVisible = true
+        private val videoLoadTimeout = Runnable {
+            if (player != null && fallbackVisible) {
+                reportPlaybackFailure("The video did not start in time.")
+            }
+        }
 
         private val gifDrawableCallback = object : Drawable.Callback {
             override fun invalidateDrawable(who: Drawable) {
@@ -100,15 +109,22 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 gifDecodeTask != null
             ) return
 
+            fallbackVisible = true
+            drawFallback()
+
             val path = getSharedPreferences(
                 LiveWallpaperLauncher.PREFERENCES,
                 MODE_PRIVATE
-            ).getString(LiveWallpaperLauncher.ACTIVE_WALLPAPER_PATH, null) ?: return
+            ).getString(LiveWallpaperLauncher.ACTIVE_WALLPAPER_PATH, null)
+                ?: return reportPlaybackFailure("No live wallpaper is selected.")
 
-            val file = runCatching { File(path).canonicalFile }.getOrNull() ?: return
+            val file = runCatching { File(path).canonicalFile }.getOrNull()
+                ?: return reportPlaybackFailure("The selected wallpaper file could not be opened.")
             val wallpaperDirectory = File(filesDir, "wallpapers").canonicalFile
             if (!file.isFile || !file.canRead() || file.parentFile != wallpaperDirectory ||
-                file.extension.lowercase() !in setOf("gif", "mp4")) return
+                file.extension.lowercase() !in setOf("gif", "mp4")) {
+                return reportPlaybackFailure("The selected wallpaper file is missing or unsupported.")
+            }
 
             when (file.extension.lowercase()) {
                 "gif" -> startGif(file)
@@ -120,7 +136,10 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private fun startVideo(file: File) {
             val exo = runCatching {
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService).build()
-            }.getOrElse { return }
+            }.getOrElse {
+                reportPlaybackFailure("The video player could not be started.")
+                return
+            }
 
             player = exo
             exo.repeatMode = Player.REPEAT_MODE_ONE
@@ -128,7 +147,17 @@ class KosmosLiveWallpaperService : WallpaperService() {
             exo.setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             exo.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    if (player === exo) stopPlayback()
+                    if (player === exo) {
+                        reportPlaybackFailure("The video could not be played.")
+                        stopVideoPlayer(exo)
+                    }
+                }
+
+                override fun onRenderedFirstFrame() {
+                    if (player === exo) {
+                        fallbackVisible = false
+                        handler.removeCallbacks(videoLoadTimeout)
+                    }
                 }
             })
 
@@ -138,14 +167,19 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 exo.prepare()
                 exo.playWhenReady = true
             }.onFailure {
-                if (player === exo) stopPlayback()
+                if (player === exo) {
+                    reportPlaybackFailure("The video could not be prepared.")
+                    stopVideoPlayer(exo)
+                }
             }
+            handler.removeCallbacks(videoLoadTimeout)
+            handler.postDelayed(videoLoadTimeout, VIDEO_LOAD_TIMEOUT_MS)
         }
 
         private fun startGif(file: File) {
             val generation = playbackGeneration
             gifDecodeTask = gifDecoder.submit {
-                val decoded: Any? = runCatching {
+                val decodeResult = runCatching {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         decodeAnimatedGif(file)
                     } else {
@@ -154,22 +188,34 @@ class KosmosLiveWallpaperService : WallpaperService() {
                             validateGifDimensions(movie.width(), movie.height())
                         } ?: throw IOException("This GIF could not be decoded")
                     }
-                }.getOrNull()
+                }
+                val decoded = decodeResult.getOrNull()
 
                 handler.post {
                     if (generation != playbackGeneration) return@post
                     gifDecodeTask = null
-                    if (!isVisible || !surfaceHolder.surface.isValid || decoded == null) return@post
+                    if (!isVisible || !surfaceWidthPositive()) return@post
+                    if (decoded == null) {
+                        reportPlaybackFailure(decodeResult.exceptionOrNull()?.message ?: "The GIF could not be decoded.")
+                        return@post
+                    }
 
                     when (decoded) {
                         is Movie -> {
                             gifMovie = decoded
                             gifStartedAt = SystemClock.uptimeMillis()
+                            fallbackVisible = false
                             handler.removeCallbacks(gifFrame)
                             handler.post(gifFrame)
                         }
                         is Drawable -> {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) attachAnimatedGif(decoded)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                attachAnimatedGif(decoded)
+                                fallbackVisible = false
+                                drawGifFrame()
+                            } else {
+                                reportPlaybackFailure("This GIF format is not supported on this Android version.")
+                            }
                         }
                     }
                 }
@@ -220,6 +266,73 @@ class KosmosLiveWallpaperService : WallpaperService() {
             }
         }
 
+        private fun surfaceWidthPositive(): Boolean =
+            surfaceWidth > 0 && surfaceHeight > 0 && surfaceHolder.surface.isValid
+
+        private fun reportPlaybackFailure(message: String) {
+            getSharedPreferences(LiveWallpaperLauncher.PREFERENCES, MODE_PRIVATE)
+                .edit().putString(LiveWallpaperLauncher.PLAYBACK_ERROR, message).apply()
+            fallbackVisible = true
+            drawFallback()
+        }
+
+        private fun drawFallback() {
+            if (!isVisible || !surfaceHolder.surface.isValid || surfaceWidth <= 0 || surfaceHeight <= 0) return
+            var canvas: Canvas? = null
+            try {
+                canvas = surfaceHolder.lockCanvas()
+                if (canvas != null) {
+                    canvas.drawColor(Color.rgb(10, 12, 18))
+                    val centerX = surfaceWidth / 2f
+                    val centerY = surfaceHeight / 2f
+                    val unit = minOf(surfaceWidth, surfaceHeight).toFloat()
+                    val logoRadius = unit * 0.105f
+                    val stroke = (unit * 0.009f).coerceAtLeast(3f)
+                    val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.WHITE
+                        style = Paint.Style.STROKE
+                        strokeWidth = stroke
+                        strokeCap = Paint.Cap.ROUND
+                        strokeJoin = Paint.Join.ROUND
+                    }
+                    canvas.drawCircle(centerX, centerY - unit * 0.12f, logoRadius, logoPaint)
+                    val mark = Path().apply {
+                        moveTo(centerX - logoRadius * 0.48f, centerY - unit * 0.12f - logoRadius * 0.43f)
+                        lineTo(centerX + logoRadius * 0.48f, centerY - unit * 0.12f - logoRadius * 0.43f)
+                        lineTo(centerX - logoRadius * 0.48f, centerY - unit * 0.12f + logoRadius * 0.43f)
+                        lineTo(centerX + logoRadius * 0.48f, centerY - unit * 0.12f + logoRadius * 0.43f)
+                    }
+                    canvas.drawPath(mark, logoPaint)
+
+                    val brandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.WHITE
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        textSize = unit * 0.052f
+                    }
+                    canvas.drawText("ZeroTech", centerX, centerY + unit * 0.035f, brandPaint)
+
+                    val messagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.LTGRAY
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                        textSize = (unit * 0.026f).coerceIn(22f, 42f)
+                    }
+                    canvas.drawText(
+                        "If you can see this then the wallpaper didn't load properly.",
+                        centerX, centerY + unit * 0.105f, messagePaint
+                    )
+                    canvas.drawText(
+                        "Please Try Again.",
+                        centerX, centerY + unit * 0.15f, messagePaint
+                    )
+                }
+            } catch (_: RuntimeException) {
+            } finally {
+                if (canvas != null) runCatching { surfaceHolder.unlockCanvasAndPost(canvas) }
+            }
+        }
+
         private fun drawGifFrame() {
             if (!isVisible || !surfaceHolder.surface.isValid) return
             var canvas: Canvas? = null
@@ -261,11 +374,20 @@ class KosmosLiveWallpaperService : WallpaperService() {
             }
         }
 
+        private fun stopVideoPlayer(exo: ExoPlayer) {
+            handler.removeCallbacks(videoLoadTimeout)
+            runCatching { exo.clearVideoSurface() }
+            runCatching { exo.stop() }
+            runCatching { exo.release() }
+            if (player === exo) player = null
+        }
+
         private fun stopPlayback() {
             playbackGeneration++
             gifDecodeTask?.cancel(true)
             gifDecodeTask = null
             handler.removeCallbacks(gifFrame)
+            handler.removeCallbacks(videoLoadTimeout)
 
             gifDrawable?.let { drawable ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -287,6 +409,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
 
     private companion object {
         private const val FRAME_INTERVAL_MS = 40L
+        private const val VIDEO_LOAD_TIMEOUT_MS = 15_000L
         private const val MAX_GIF_DECODE_DIMENSION = 2048
         private const val MAX_GIF_SOURCE_DIMENSION = 4096
         private const val MAX_GIF_SOURCE_PIXELS = 16_000_000L
