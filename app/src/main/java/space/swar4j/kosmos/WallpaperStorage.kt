@@ -114,6 +114,26 @@ class WallpaperStorage(private val context: Context) {
         }
     }
 
+    suspend fun downloadSearchResult(result: OnlineWallpaperResult): StoredWallpaper = withContext(Dispatchers.IO) {
+        val extension = extensionFromUrl(result.downloadUrl).let { if (it == "jpeg") "jpg" else it }
+        if (extension !in setOf("jpg", "png", "webp", "gif")) throw IOException("Unsupported image format")
+        val title = sanitizeTitle(result.title)
+        val destination = uniqueDestination(title, extension)
+        val temporary = File(wallpaperDirectory, "${destination.name}.part")
+        try {
+            downloadSecure(result.downloadUrl, temporary, MAX_IMAGE_BYTES)
+            validateMedia(temporary, extension)
+            if (!temporary.renameTo(destination)) throw IOException("Couldn't save the image")
+            val thumbnail = createThumbnail(destination)
+                ?: throw IOException("Couldn't create a preview for this image")
+            StoredWallpaper(destination, title, thumbnail, extension == "gif")
+        } catch (error: Exception) {
+            temporary.delete()
+            destination.delete()
+            throw error
+        }
+    }
+
     suspend fun listWallpapers(): List<StoredWallpaper> = withContext(Dispatchers.IO) {
         wallpaperDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
         thumbnailDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
