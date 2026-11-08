@@ -1,6 +1,10 @@
 package space.swar4j.kosmos
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,6 +73,19 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val notificationPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val permissionPrefs = getSharedPreferences("kosmos_settings", MODE_PRIVATE)
+            if (!permissionPrefs.getBoolean("notification_permission_requested", false)) {
+                permissionPrefs.edit { putBoolean("notification_permission_requested", true) }
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         val storage = WallpaperStorage(applicationContext)
         val applier = StaticWallpaperApplier(applicationContext)
         val liveLauncher = LiveWallpaperLauncher(applicationContext)
@@ -120,8 +137,14 @@ private fun KosmosScreen(
             delay(750)
             val failure = preferences.getString(LiveWallpaperLauncher.PLAYBACK_ERROR, null)
             if (!failure.isNullOrBlank()) {
-                preferences.edit { remove(LiveWallpaperLauncher.PLAYBACK_ERROR) }
-                snackbarHostState.showSnackbar("Live wallpaper failed: $failure")
+                val code = preferences.getString(LiveWallpaperLauncher.PLAYBACK_ERROR_CODE, "KOS-UNKNOWN")
+                val category = preferences.getString(LiveWallpaperLauncher.PLAYBACK_ERROR_CATEGORY, "Unknown")
+                preferences.edit {
+                    remove(LiveWallpaperLauncher.PLAYBACK_ERROR)
+                    remove(LiveWallpaperLauncher.PLAYBACK_ERROR_CODE)
+                    remove(LiveWallpaperLauncher.PLAYBACK_ERROR_CATEGORY)
+                }
+                snackbarHostState.showSnackbar("Wallpaper failed [$code] • $category: $failure")
             }
         }
     }
