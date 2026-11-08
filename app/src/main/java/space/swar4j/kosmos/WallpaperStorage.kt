@@ -134,6 +134,16 @@ class WallpaperStorage(private val context: Context) {
         }
     }
 
+    suspend fun deleteWallpaper(file: File) = withContext(Dispatchers.IO) {
+        val safeFile = runCatching { file.canonicalFile }.getOrNull()
+        val safeDirectory = wallpaperDirectory.canonicalFile
+        if (safeFile == null || safeFile.parentFile != safeDirectory || safeFile.name.startsWith("preset_")) {
+            throw IOException("This wallpaper cannot be deleted")
+        }
+        if (safeFile.exists() && !safeFile.delete()) throw IOException("Couldn't remove the downloaded wallpaper")
+        File(thumbnailDirectory, "${safeFile.nameWithoutExtension}.jpg").delete()
+    }
+
     suspend fun listWallpapers(): List<StoredWallpaper> = withContext(Dispatchers.IO) {
         wallpaperDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
         thumbnailDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
