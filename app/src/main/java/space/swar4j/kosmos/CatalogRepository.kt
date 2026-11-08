@@ -1,7 +1,8 @@
 package space.swar4j.kosmos
 
 import android.content.Context
-import android.net.Uri
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -29,7 +30,7 @@ class CatalogRepository(context: Context) {
     suspend fun load(forceRefresh: Boolean = false): List<CatalogItem> = withContext(Dispatchers.IO) {
         if (forceRefresh || preferences.getString(KEY_JSON, null) == null) {
             runCatching { fetchCatalogue() }.onSuccess { json ->
-                preferences.edit().putString(KEY_JSON, json).apply()
+                preferences.edit { putString(KEY_JSON, json) }
             }
         }
         val cached = preferences.getString(KEY_JSON, null)
@@ -100,7 +101,7 @@ class CatalogRepository(context: Context) {
     }.getOrDefault(emptyList())
 
     private fun isAllowedUrl(value: String, hosts: Set<String>): Boolean {
-        val uri = runCatching { Uri.parse(value) }.getOrNull() ?: return false
+        val uri = runCatching { value.toUri() }.getOrNull() ?: return false
         return uri.scheme == "https" && uri.userInfo == null &&
             (uri.port == -1 || uri.port == 443) &&
             uri.host?.lowercase()?.let(hosts::contains) == true

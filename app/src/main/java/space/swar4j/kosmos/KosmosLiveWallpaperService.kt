@@ -1,10 +1,10 @@
 package space.swar4j.kosmos
 
+import android.annotation.SuppressLint
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Movie
 import android.graphics.ImageDecoder
-import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Handler
@@ -12,10 +12,13 @@ import android.os.Looper
 import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
+import androidx.annotation.RequiresApi
+import androidx.core.graphics.withTranslation
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import java.io.File
 import java.io.IOException
@@ -35,7 +38,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
 
         private var player: ExoPlayer? = null
         private var gifMovie: Movie? = null
-        private var gifDrawable: AnimatedImageDrawable? = null
+        private var gifDrawable: Drawable? = null
         private var gifDecodeTask: Future<*>? = null
         private var gifStartedAt = 0L
         private var surfaceWidth = 0
@@ -113,6 +116,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             }
         }
 
+        @OptIn(UnstableApi::class)
         private fun startVideo(file: File) {
             val exo = runCatching {
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService).build()
@@ -158,24 +162,23 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     if (!isVisible || !surfaceHolder.surface.isValid || decoded == null) return@post
 
                     when (decoded) {
-                        is AnimatedImageDrawable -> {
-                            gifDrawable = decoded
-                            decoded.setBounds(0, 0, decoded.intrinsicWidth, decoded.intrinsicHeight)
-                            decoded.callback = gifDrawableCallback
-                            decoded.start()
-                        }
                         is Movie -> {
                             gifMovie = decoded
                             gifStartedAt = SystemClock.uptimeMillis()
                             handler.removeCallbacks(gifFrame)
                             handler.post(gifFrame)
                         }
+                        is Drawable -> {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) attachAnimatedGif(decoded)
+                        }
                     }
                 }
             }
         }
 
-        private fun decodeAnimatedGif(file: File): AnimatedImageDrawable {
+        @RequiresApi(Build.VERSION_CODES.P)
+        @SuppressLint("InlinedApi")
+        private fun decodeAnimatedGif(file: File): Drawable {
             val decoded = ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) { decoder, info, _ ->
                 val width = info.size.width
                 val height = info.size.height
@@ -187,8 +190,24 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 )
                 decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
             }
-            return decoded as? AnimatedImageDrawable
-                ?: throw IOException("The selected GIF is not animated or is unsupported")
+            if (decoded !is android.graphics.drawable.AnimatedImageDrawable) {
+                throw IOException("The selected GIF is not animated or is unsupported")
+            }
+            return decoded
+        }
+
+        @RequiresApi(Build.VERSION_CODES.P)
+        private fun attachAnimatedGif(drawable: Drawable) {
+            val animated = drawable as? android.graphics.drawable.AnimatedImageDrawable ?: return
+            gifDrawable = animated
+            animated.setBounds(0, 0, animated.intrinsicWidth, animated.intrinsicHeight)
+            animated.callback = gifDrawableCallback
+            animated.start()
+        }
+
+        @RequiresApi(Build.VERSION_CODES.P)
+        private fun stopAnimatedGif(drawable: Drawable) {
+            (drawable as? android.graphics.drawable.AnimatedImageDrawable)?.stop()
         }
 
         private fun validateGifDimensions(width: Int, height: Int) {
@@ -214,11 +233,12 @@ class KosmosLiveWallpaperService : WallpaperService() {
                         val width = drawable.intrinsicWidth.coerceAtLeast(1)
                         val height = drawable.intrinsicHeight.coerceAtLeast(1)
                         val scale = max(surfaceWidth.toFloat() / width, surfaceHeight.toFloat() / height)
-                        canvas.save()
-                        canvas.translate((surfaceWidth - width * scale) / 2f, (surfaceHeight - height * scale) / 2f)
-                        canvas.scale(scale, scale)
-                        drawable.draw(canvas)
-                        canvas.restore()
+                        val x = (surfaceWidth - width * scale) / 2f
+                        val y = (surfaceHeight - height * scale) / 2f
+                        canvas.withTranslation(x, y) {
+                            scale(scale, scale)
+                            drawable.draw(this)
+                        }
                     } else if (movie != null) {
                         val duration = movie.duration().coerceAtLeast(1)
                         movie.setTime(((SystemClock.uptimeMillis() - gifStartedAt) % duration).toInt())
@@ -226,14 +246,12 @@ class KosmosLiveWallpaperService : WallpaperService() {
                             surfaceWidth.toFloat() / movie.width(),
                             surfaceHeight.toFloat() / movie.height()
                         )
-                        canvas.save()
-                        canvas.translate(
-                            (surfaceWidth - movie.width() * scale) / 2f,
-                            (surfaceHeight - movie.height() * scale) / 2f
-                        )
-                        canvas.scale(scale, scale)
-                        movie.draw(canvas, 0f, 0f)
-                        canvas.restore()
+                        val x = (surfaceWidth - movie.width() * scale) / 2f
+                        val y = (surfaceHeight - movie.height() * scale) / 2f
+                        canvas.withTranslation(x, y) {
+                            scale(scale, scale)
+                            movie.draw(this, 0f, 0f)
+                        }
                     }
                 }
             } catch (_: RuntimeException) {
@@ -250,7 +268,9 @@ class KosmosLiveWallpaperService : WallpaperService() {
             handler.removeCallbacks(gifFrame)
 
             gifDrawable?.let { drawable ->
-                runCatching { drawable.stop() }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    runCatching { stopAnimatedGif(drawable) }
+                }
                 drawable.callback = null
             }
             gifDrawable = null
@@ -263,11 +283,10 @@ class KosmosLiveWallpaperService : WallpaperService() {
             }
             player = null
         }
-
     }
 
     private companion object {
-        private const val FRAME_INTERVAL_MS = 33L
+        private const val FRAME_INTERVAL_MS = 40L
         private const val MAX_GIF_DECODE_DIMENSION = 2048
         private const val MAX_GIF_SOURCE_DIMENSION = 4096
         private const val MAX_GIF_SOURCE_PIXELS = 16_000_000L

@@ -1,6 +1,7 @@
 package space.swar4j.kosmos
 
 import android.content.Context
+import androidx.core.content.edit
 
 class WallpaperMetadataStore(context: Context) {
     private val preferences = context.applicationContext
@@ -13,7 +14,7 @@ class WallpaperMetadataStore(context: Context) {
         val favorites = preferences.getStringSet(KEY_FAVORITES, emptySet())
             .orEmpty().toMutableSet()
         if (favorite) favorites.add(fileName) else favorites.remove(fileName)
-        preferences.edit().putStringSet(KEY_FAVORITES, favorites).apply()
+        preferences.edit { putStringSet(KEY_FAVORITES, favorites) }
     }
 
     fun category(fileName: String): String {
@@ -29,7 +30,7 @@ class WallpaperMetadataStore(context: Context) {
 
     fun setCategory(fileName: String, category: String) {
         require(category in CATEGORIES)
-        preferences.edit().putString(categoryKey(fileName), category).apply()
+        preferences.edit { putString(categoryKey(fileName), category) }
     }
 
     companion object {
