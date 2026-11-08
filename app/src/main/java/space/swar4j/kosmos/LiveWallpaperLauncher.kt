@@ -23,6 +23,8 @@ class LiveWallpaperLauncher(context: Context) {
             .edit {
                 putString(ACTIVE_WALLPAPER_PATH, safeFile.absolutePath)
                 remove(PLAYBACK_ERROR)
+                remove(PLAYBACK_ERROR_CODE)
+                remove(PLAYBACK_ERROR_CATEGORY)
             }
 
         val component = ComponentName(appContext, KosmosLiveWallpaperService::class.java)
