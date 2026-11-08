@@ -20,7 +20,10 @@ class LiveWallpaperLauncher(context: Context) {
         }
 
         appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-            .edit { putString(ACTIVE_WALLPAPER_PATH, safeFile.absolutePath) }
+            .edit {
+                putString(ACTIVE_WALLPAPER_PATH, safeFile.absolutePath)
+                remove(PLAYBACK_ERROR)
+            }
 
         val component = ComponentName(appContext, KosmosLiveWallpaperService::class.java)
         val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
@@ -33,5 +36,6 @@ class LiveWallpaperLauncher(context: Context) {
     companion object {
         const val PREFERENCES = "kosmos_wallpaper"
         const val ACTIVE_WALLPAPER_PATH = "active_wallpaper_path"
+        const val PLAYBACK_ERROR = "playback_error"
     }
 }
