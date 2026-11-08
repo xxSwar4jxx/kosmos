@@ -28,6 +28,16 @@ class WallpaperMetadataStore(context: Context) {
         }
     }
 
+    fun remove(fileName: String) {
+        val favorites = preferences.getStringSet(KEY_FAVORITES, emptySet())
+            .orEmpty().toMutableSet()
+        favorites.remove(fileName)
+        preferences.edit {
+            putStringSet(KEY_FAVORITES, favorites)
+            remove(categoryKey(fileName))
+        }
+    }
+
     fun setCategory(fileName: String, category: String) {
         require(category in CATEGORIES)
         preferences.edit { putString(categoryKey(fileName), category) }
