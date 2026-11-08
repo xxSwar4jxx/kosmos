@@ -4,6 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import androidx.compose.runtime.DisposableEffect
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.activity.ComponentActivity
@@ -133,6 +137,27 @@ private fun KosmosScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val connectivityManager = remember {
+        context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
+    fun updateInternetState() {
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        hasInternet = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+    DisposableEffect(connectivityManager) {
+        updateInternetState()
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) { updateInternetState() }
+            override fun onLost(network: Network) { updateInternetState() }
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                updateInternetState()
+            }
+        }
+        connectivityManager.registerDefaultNetworkCallback(callback)
+        onDispose { runCatching { connectivityManager.unregisterNetworkCallback(callback) } }
+    }
 
     LaunchedEffect(Unit) {
         val preferences = context.getSharedPreferences(LiveWallpaperLauncher.PREFERENCES, android.content.Context.MODE_PRIVATE)
@@ -153,6 +178,10 @@ private fun KosmosScreen(
     }
     var wallpapers by remember { mutableStateOf<List<StoredWallpaper>>(emptyList()) }
     var catalogItems by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
+    var onlineResults by remember { mutableStateOf<List<OnlineWallpaperResult>>(emptyList()) }
+    var onlineQuery by rememberSaveable { mutableStateOf("") }
+    var isSearchingOnline by remember { mutableStateOf(false) }
+    var hasInternet by remember { mutableStateOf(false) }
     var selectedWallpaper by remember { mutableStateOf<StoredWallpaper?>(null) }
     var showApplyDialog by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
@@ -236,7 +265,7 @@ private fun KosmosScreen(
 
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Library", "Discover").forEach { destination ->
+                listOf("Library", "Discover", "Search").forEach { destination ->
                     FilterChip(
                         selected = tab == destination,
                         onClick = { tab = destination },
@@ -315,7 +344,7 @@ private fun KosmosScreen(
                 ) {
                     Text(if (isImporting) "Importing…" else "Import wallpaper")
                 }
-            } else {
+            } else if (tab == "Discover") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -362,6 +391,100 @@ private fun KosmosScreen(
                                     scope.launch {
                                         downloadingId = item.id
                                         runCatching { storage.downloadCatalogueItem(item) }
+                                            .onSuccess {
+                                                refreshLibrary()
+                                                snackbarHostState.showSnackbar("Saved to your library")
+                                            }
+                                            .onFailure {
+                                                snackbarHostState.showSnackbar(it.message ?: "Download failed")
+                                            }
+                                        downloadingId = null
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text("Search the web", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Find wallpapers by keyword from Wikimedia Commons.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = onlineQuery,
+                    onValueChange = { onlineQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = hasInternet && !isSearchingOnline,
+                    placeholder = { Text("Try: anime scenery, sakura, cyberpunk") }
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        if (!hasInternet) return@Button
+                        scope.launch {
+                            isSearchingOnline = true
+                            onlineResults = emptyList()
+                            runCatching { OnlineWallpaperSearch().search(onlineQuery) }
+                                .onSuccess { onlineResults = it }
+                                .onFailure { snackbarHostState.showSnackbar(it.message ?: "Image search failed") }
+                            isSearchingOnline = false
+                        }
+                    },
+                    enabled = hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isSearchingOnline) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Text("Search images")
+                }
+                Spacer(Modifier.height(8.dp))
+                if (!hasInternet) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "No Internet Connection",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                "connect to the internet to search for wallpapers",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                } else if (isSearchingOnline) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (onlineResults.isEmpty()) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(
+                            if (onlineQuery.isBlank()) "Search for something you like."
+                            else "No results yet. Try a different keyword.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 148.dp),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(onlineResults, key = { it.id }) { result ->
+                            OnlineSearchTile(
+                                result = result,
+                                downloading = downloadingId == "search-${result.id}",
+                                onDownload = {
+                                    if (downloadingId != null) return@OnlineSearchTile
+                                    scope.launch {
+                                        downloadingId = "search-${result.id}"
+                                        runCatching { storage.downloadSearchResult(result) }
                                             .onSuccess {
                                                 refreshLibrary()
                                                 snackbarHostState.showSnackbar("Saved to your library")
@@ -541,6 +664,36 @@ private fun WallpaperTile(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnlineSearchTile(
+    result: OnlineWallpaperResult,
+    downloading: Boolean,
+    onDownload: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(9.dp)) {
+            AsyncImage(
+                model = result.previewUrl,
+                contentDescription = result.title,
+                modifier = Modifier.fillMaxWidth().aspectRatio(0.72f).clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(result.title, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+            Text(result.license, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Spacer(Modifier.height(6.dp))
+            Button(onClick = onDownload, enabled = !downloading, modifier = Modifier.fillMaxWidth()) {
+                if (downloading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text("Download")
             }
         }
     }
