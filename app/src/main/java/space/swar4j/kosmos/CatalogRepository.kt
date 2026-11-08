@@ -71,6 +71,7 @@ class CatalogRepository(context: Context) {
 
     private fun parse(raw: String): List<CatalogItem> = runCatching {
         val entries = JSONObject(raw).optJSONArray("items") ?: JSONArray()
+        val seenIds = HashSet<String>()
         buildList {
             for (index in 0 until entries.length()) {
                 val entry = entries.optJSONObject(index) ?: continue
@@ -88,7 +89,7 @@ class CatalogRepository(context: Context) {
                     item.category.length > 32 || item.creator.isBlank() || item.creator.length > 100 ||
                     item.license.isBlank() || item.license.length > 64 || size >= MAX_ITEMS
                 ) continue
-                if (any { it.id == item.id }) continue
+                if (!seenIds.add(item.id)) continue
                 if (!isAllowedUrl(item.previewUrl, PREVIEW_HOSTS) ||
                     !isAllowedUrl(item.downloadUrl, DOWNLOAD_HOSTS) ||
                     !isAllowedUrl(item.sourceUrl, SOURCE_HOSTS)
