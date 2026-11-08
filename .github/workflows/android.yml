@@ -42,6 +42,9 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
 
+      - name: Run Android lint and unit tests
+        run: gradle --no-daemon lintDebug testDebugUnitTest
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
