@@ -150,9 +150,9 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private fun stopPlayback() {
             handler.removeCallbacks(gifFrame)
             gifMovie = null
-            player?.runCatching {
-                clearVideoSurface()
-                release()
+            runCatching {
+                player?.clearVideoSurface()
+                player?.release()
             }
             player = null
         }

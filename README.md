@@ -25,7 +25,7 @@ Kosmos is a privacy-first, offline-first Android wallpaper app for static images
 
 ## Current implementation
 
-The initial Android project is in place. The first milestone currently includes:
+The Android project foundation and first live-wallpaper implementation are in place. Current functionality includes:
 
 - Compose application shell with dark-first and light themes.
 - Local image import through Android's system document picker.

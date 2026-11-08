@@ -1,6 +1,7 @@
 package space.swar4j.kosmos
 
 import android.content.Context
+import android.os.Build
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -118,7 +119,7 @@ class WallpaperStorage(private val context: Context) {
                 @Suppress("DEPRECATION")
                 val movie = Movie.decodeFile(file.absolutePath)
                     ?: throw IOException("This GIF could not be decoded")
-                validateDimensions(movie.width(), movie.height())
+                validateAnimatedDimensions(movie.width(), movie.height())
             }
             "mp4" -> {
                 val retriever = MediaMetadataRetriever()
@@ -133,7 +134,7 @@ class WallpaperStorage(private val context: Context) {
                     val duration = retriever.extractMetadata(
                         MediaMetadataRetriever.METADATA_KEY_DURATION
                     )?.toLongOrNull() ?: 0L
-                    validateDimensions(width, height)
+                    validateVideoDimensions(width, height)
                     if (duration <= 0 || duration > MAX_VIDEO_DURATION_MS) {
                         throw IOException("Videos must be between 1 ms and 2 minutes long")
                     }
@@ -147,10 +148,27 @@ class WallpaperStorage(private val context: Context) {
     }
 
     private fun validateDimensions(width: Int, height: Int) {
+        validateDimensions(width, height, MAX_DIMENSION, MAX_PIXELS)
+    }
+
+    private fun validateAnimatedDimensions(width: Int, height: Int) {
+        validateDimensions(width, height, MAX_ANIMATED_DIMENSION, MAX_ANIMATED_PIXELS)
+    }
+
+    private fun validateVideoDimensions(width: Int, height: Int) {
+        validateDimensions(width, height, MAX_VIDEO_DIMENSION, MAX_VIDEO_PIXELS)
+    }
+
+    private fun validateDimensions(
+        width: Int,
+        height: Int,
+        maxDimension: Int,
+        maxPixels: Long
+    ) {
         val pixels = width.toLong() * height.toLong()
         if (width <= 0 || height <= 0 ||
-            width > MAX_DIMENSION || height > MAX_DIMENSION ||
-            pixels > MAX_PIXELS
+            width > maxDimension || height > maxDimension ||
+            pixels > maxPixels
         ) {
             throw IOException("This media has invalid or unsupported dimensions")
         }
@@ -164,7 +182,16 @@ class WallpaperStorage(private val context: Context) {
                 val retriever = MediaMetadataRetriever()
                 try {
                     retriever.setDataSource(file.absolutePath)
-                    retriever.getFrameAtTime(0)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        retriever.getScaledFrameAtTime(
+                            0,
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                            THUMBNAIL_WIDTH,
+                            THUMBNAIL_HEIGHT
+                        )
+                    } else {
+                        retriever.getFrameAtTime(0)
+                    }
                 } catch (_: RuntimeException) {
                     null
                 } finally {
@@ -174,11 +201,20 @@ class WallpaperStorage(private val context: Context) {
             "gif" -> {
                 val movie = Movie.decodeFile(file.absolutePath)
                 if (movie == null) null else {
+                    val scale = minOf(
+                        1f,
+                        THUMBNAIL_WIDTH.toFloat() / movie.width(),
+                        THUMBNAIL_HEIGHT.toFloat() / movie.height()
+                    )
                     val frame = Bitmap.createBitmap(
-                        movie.width(), movie.height(), Bitmap.Config.ARGB_8888
+                        (movie.width() * scale).toInt().coerceAtLeast(1),
+                        (movie.height() * scale).toInt().coerceAtLeast(1),
+                        Bitmap.Config.ARGB_8888
                     )
                     movie.setTime(0)
-                    movie.draw(Canvas(frame), 0f, 0f)
+                    val canvas = Canvas(frame)
+                    canvas.scale(scale, scale)
+                    movie.draw(canvas, 0f, 0f)
                     frame
                 }
             }
@@ -215,7 +251,13 @@ class WallpaperStorage(private val context: Context) {
         private const val MAX_VIDEO_BYTES = 150L * 1024L * 1024L
         private const val MAX_DIMENSION = 12000
         private const val MAX_PIXELS = 80_000_000L
+        private const val MAX_ANIMATED_DIMENSION = 4096
+        private const val MAX_ANIMATED_PIXELS = 16_000_000L
+        private const val MAX_VIDEO_DIMENSION = 4096
+        private const val MAX_VIDEO_PIXELS = 16_000_000L
         private const val MAX_VIDEO_DURATION_MS = 120_000L
+        private const val THUMBNAIL_WIDTH = 512
+        private const val THUMBNAIL_HEIGHT = 768
         private val SUPPORTED_EXTENSIONS = setOf("jpg", "png", "webp", "gif", "mp4")
     }
 }
