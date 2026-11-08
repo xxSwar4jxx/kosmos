@@ -45,6 +45,14 @@ jobs:
       - name: Run Android lint and unit tests
         run: gradle --no-daemon lintDebug testDebugUnitTest
 
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kosmos-lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
