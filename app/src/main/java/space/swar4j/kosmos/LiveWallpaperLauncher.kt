@@ -39,5 +39,7 @@ class LiveWallpaperLauncher(context: Context) {
         const val PREFERENCES = "kosmos_wallpaper"
         const val ACTIVE_WALLPAPER_PATH = "active_wallpaper_path"
         const val PLAYBACK_ERROR = "playback_error"
+        const val PLAYBACK_ERROR_CODE = "playback_error_code"
+        const val PLAYBACK_ERROR_CATEGORY = "playback_error_category"
     }
 }
