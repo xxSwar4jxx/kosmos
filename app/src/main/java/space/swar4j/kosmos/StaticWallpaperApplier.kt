@@ -29,7 +29,7 @@ class StaticWallpaperApplier(context: Context) {
             }
 
             file.inputStream().buffered().use { input ->
-                wallpaperManager.setStream(input, null, true, flags)
+                wallpaperManager.setStream(input, null, false, flags)
             }
         }
     }

@@ -29,7 +29,13 @@ class WallpaperStorage(private val context: Context) {
         }
 
         val displayName = queryDisplayName(uri)
-        val destination = File(wallpaperDirectory, "${UUID.randomUUID()}.$extension")
+        val title = displayName.substringBeforeLast('.', displayName)
+            .replace(Regex("[^A-Za-z0-9 _-]"), "")
+            .trim()
+            .take(32)
+            .ifBlank { "Wallpaper" }
+        val safeFileName = title.replace(Regex("\\s+"), "-")
+        val destination = File(wallpaperDirectory, "${safeFileName}__${UUID.randomUUID()}.$extension")
         val temporary = File(wallpaperDirectory, "${destination.name}.part")
 
         try {
@@ -66,11 +72,7 @@ class WallpaperStorage(private val context: Context) {
                 throw IOException("Couldn't save the image")
             }
 
-            StoredWallpaper(
-                file = destination,
-                title = displayName.substringBeforeLast('.', displayName)
-                    .take(48).ifBlank { "Wallpaper" }
-            )
+            StoredWallpaper(file = destination, title = title)
         } catch (error: Exception) {
             temporary.delete()
             destination.delete()
@@ -85,7 +87,8 @@ class WallpaperStorage(private val context: Context) {
             ?.map { file ->
                 StoredWallpaper(
                     file = file,
-                    title = file.nameWithoutExtension.take(48).ifBlank { "Wallpaper" }
+                    title = file.nameWithoutExtension.substringBefore("__")
+                        .replace("-", " ").take(48).ifBlank { "Wallpaper" }
                 )
             }
             ?: emptyList()
