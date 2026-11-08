@@ -17,7 +17,11 @@ class StaticWallpaperApplier(context: Context) {
 
     suspend fun apply(file: java.io.File, destination: WallpaperDestination) {
         withContext(Dispatchers.IO) {
-            if (!file.isFile || !file.canRead()) {
+            val wallpaperDirectory = java.io.File(context.filesDir, "wallpapers").canonicalFile
+            val safeFile = runCatching { file.canonicalFile }.getOrNull()
+            if (safeFile == null || !safeFile.isFile || !safeFile.canRead() ||
+                safeFile.parentFile != wallpaperDirectory ||
+                safeFile.extension.lowercase() !in setOf("jpg", "png", "webp")) {
                 throw IOException("The wallpaper file is unavailable")
             }
 
@@ -28,7 +32,7 @@ class StaticWallpaperApplier(context: Context) {
                     WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
             }
 
-            file.inputStream().buffered().use { input ->
+            safeFile.inputStream().buffered().use { input ->
                 wallpaperManager.setStream(input, null, false, flags)
             }
         }

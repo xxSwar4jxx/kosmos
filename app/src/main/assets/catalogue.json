@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-08",
+  "items": [
+    {
+      "id": "commons-most-beautiful-landscape",
+      "title": "Open Country",
+      "category": "Nature",
+      "previewUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Most_beautiful_landscape_wallpaper.jpg",
+      "downloadUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Most_beautiful_landscape_wallpaper.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Most_beautiful_landscape_wallpaper.jpg",
+      "creator": "U.S. Fish and Wildlife Service",
+      "license": "Public domain"
+    },
+    {
+      "id": "commons-scenic-landscape",
+      "title": "Scenic",
+      "category": "Nature",
+      "previewUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Scenic_landscape.jpg",
+      "downloadUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Scenic_landscape.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Scenic_landscape.jpg",
+      "creator": "Gentry Ryan, U.S. Fish and Wildlife Service",
+      "license": "Public domain"
+    },
+    {
+      "id": "commons-mountain-forest-fields",
+      "title": "Mountain Fields",
+      "category": "Nature",
+      "previewUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Mountain_forest_and_fields_wallpaper.jpg",
+      "downloadUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Mountain_forest_and_fields_wallpaper.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mountain_forest_and_fields_wallpaper.jpg",
+      "creator": "U.S. Fish and Wildlife Service",
+      "license": "Public domain"
+    },
+    {
+      "id": "commons-landscape-aimait21",
+      "title": "Quiet Peaks",
+      "category": "Nature",
+      "previewUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Landscape_aimait21.png",
+      "downloadUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Landscape_aimait21.png",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Landscape_aimait21.png",
+      "creator": "Ap21theia",
+      "license": "CC0 1.0"
+    }
+  ]
+}

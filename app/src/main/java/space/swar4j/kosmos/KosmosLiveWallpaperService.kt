@@ -102,8 +102,10 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 MODE_PRIVATE
             ).getString(LiveWallpaperLauncher.ACTIVE_WALLPAPER_PATH, null) ?: return
 
-            val file = File(path)
-            if (!file.isFile || !file.canRead()) return
+            val file = runCatching { File(path).canonicalFile }.getOrNull() ?: return
+            val wallpaperDirectory = File(filesDir, "wallpapers").canonicalFile
+            if (!file.isFile || !file.canRead() || file.parentFile != wallpaperDirectory ||
+                file.extension.lowercase() !in setOf("gif", "mp4")) return
 
             when (file.extension.lowercase()) {
                 "gif" -> startGif(file)

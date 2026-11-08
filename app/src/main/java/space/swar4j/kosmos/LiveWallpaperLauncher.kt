@@ -10,11 +10,17 @@ class LiveWallpaperLauncher(context: Context) {
     private val appContext = context.applicationContext
 
     fun launch(file: File) {
-        require(file.isFile && file.canRead()) { "The selected live wallpaper is unavailable" }
+        val wallpaperDirectory = java.io.File(appContext.filesDir, "wallpapers").canonicalFile
+        val safeFile = runCatching { file.canonicalFile }.getOrNull()
+        require(safeFile != null && safeFile.isFile && safeFile.canRead() &&
+            safeFile.parentFile == wallpaperDirectory &&
+            safeFile.extension.lowercase() in setOf("gif", "mp4")) {
+            "The selected live wallpaper is unavailable"
+        }
 
         appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .edit()
-            .putString(ACTIVE_WALLPAPER_PATH, file.absolutePath)
+            .putString(ACTIVE_WALLPAPER_PATH, safeFile.absolutePath)
             .apply()
 
         val component = ComponentName(appContext, KosmosLiveWallpaperService::class.java)

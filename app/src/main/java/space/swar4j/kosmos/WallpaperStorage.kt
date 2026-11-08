@@ -4,7 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Movie
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Shader
 import android.graphics.ImageDecoder
 import android.graphics.drawable.AnimatedImageDrawable
 import android.media.MediaMetadataRetriever
@@ -15,13 +20,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
+import kotlin.math.max
+import kotlin.random.Random
 
 data class StoredWallpaper(
     val file: File,
     val title: String,
     val thumbnail: File,
-    val isAnimated: Boolean
+    val isAnimated: Boolean,
+    val isPreset: Boolean = false
 )
 
 class WallpaperStorage(private val context: Context) {
@@ -31,18 +41,28 @@ class WallpaperStorage(private val context: Context) {
     private val thumbnailDirectory: File
         get() = File(context.filesDir, "thumbnails").apply { mkdirs() }
 
+    suspend fun ensurePresets() = withContext(Dispatchers.IO) {
+        val presets = listOf(
+            Preset("preset_aurora.jpg", "Aurora", intArrayOf(0xFF071C2C.toInt(), 0xFF146B68.toInt(), 0xFFB6A0C8.toInt()), 0),
+            Preset("preset_cosmos.jpg", "Eventide", intArrayOf(0xFF080B20.toInt(), 0xFF283D75.toInt(), 0xFFB45B8A.toInt()), 1),
+            Preset("preset_dusk.jpg", "Afterglow", intArrayOf(0xFF311B38.toInt(), 0xFFB65D62.toInt(), 0xFFF0B477.toInt()), 2),
+            Preset("preset_mono.jpg", "Monolith", intArrayOf(0xFF101318.toInt(), 0xFF444B57.toInt(), 0xFF9CA4B1.toInt()), 3)
+        )
+        presets.forEach { preset ->
+            val file = File(wallpaperDirectory, preset.fileName)
+            if (!file.isFile || file.length() == 0L) createPreset(file, preset)
+            val thumbnail = File(thumbnailDirectory, "${file.nameWithoutExtension}.jpg")
+            if (file.isFile && !thumbnail.isFile) createThumbnail(file)
+        }
+    }
+
     suspend fun importMedia(uri: Uri): StoredWallpaper = withContext(Dispatchers.IO) {
         val displayName = queryDisplayName(uri)
         val extension = resolveExtension(context.contentResolver.getType(uri), displayName)
-        val title = displayName.substringBeforeLast('.', displayName)
-            .replace(Regex("[^A-Za-z0-9 _-]"), "")
-            .trim()
-            .take(32)
-            .ifBlank { "Wallpaper" }
-        val safeFileName = title.replace(Regex("\\s+"), "-")
-        val destination = File(wallpaperDirectory, "${safeFileName}__${UUID.randomUUID()}.$extension")
+        val title = sanitizeTitle(displayName.substringBeforeLast('.', displayName))
+        val destination = uniqueDestination(title, extension)
         val temporary = File(wallpaperDirectory, "${destination.name}.part")
-        val maxBytes = if (extension == "mp4") MAX_VIDEO_BYTES else MAX_IMAGE_BYTES
+        val maxBytes = maxBytesFor(extension)
 
         try {
             val input = context.contentResolver.openInputStream(uri)
@@ -55,25 +75,36 @@ class WallpaperStorage(private val context: Context) {
                         val count = source.read(buffer)
                         if (count < 0) break
                         totalBytes += count
-                        if (totalBytes > maxBytes) {
-                            throw IOException("This file exceeds Kosmos' import size limit")
-                        }
+                        if (totalBytes > maxBytes) throw IOException("This file exceeds Kosmos' import size limit")
                         output.write(buffer, 0, count)
                     }
                 }
             }
-
             validateMedia(temporary, extension)
             if (!temporary.renameTo(destination)) throw IOException("Couldn't save the wallpaper")
             val thumbnail = createThumbnail(destination)
                 ?: throw IOException("Couldn't create a preview for this wallpaper")
+            StoredWallpaper(destination, title, thumbnail, extension == "gif" || extension == "mp4")
+        } catch (error: Exception) {
+            temporary.delete()
+            destination.delete()
+            throw error
+        }
+    }
 
-            StoredWallpaper(
-                file = destination,
-                title = title,
-                thumbnail = thumbnail,
-                isAnimated = extension == "gif" || extension == "mp4"
-            )
+    suspend fun downloadCatalogueItem(item: CatalogItem): StoredWallpaper = withContext(Dispatchers.IO) {
+        val extension = extensionFromUrl(item.downloadUrl)
+        if (extension !in SUPPORTED_EXTENSIONS) throw IOException("Unsupported catalogue file type")
+        val title = sanitizeTitle(item.title)
+        val destination = uniqueDestination(title, extension)
+        val temporary = File(wallpaperDirectory, "${destination.name}.part")
+        try {
+            downloadSecure(item.downloadUrl, temporary, maxBytesFor(extension))
+            validateMedia(temporary, extension)
+            if (!temporary.renameTo(destination)) throw IOException("Couldn't save the download")
+            val thumbnail = createThumbnail(destination)
+                ?: throw IOException("Couldn't create a preview for this download")
+            StoredWallpaper(destination, title, thumbnail, extension == "gif" || extension == "mp4")
         } catch (error: Exception) {
             temporary.delete()
             destination.delete()
@@ -82,22 +113,144 @@ class WallpaperStorage(private val context: Context) {
     }
 
     suspend fun listWallpapers(): List<StoredWallpaper> = withContext(Dispatchers.IO) {
+        wallpaperDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
         wallpaperDirectory.listFiles()
-            ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
+            ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS &&
+                runCatching { it.canonicalFile.parentFile == wallpaperDirectory.canonicalFile }.getOrDefault(false) }
             ?.sortedByDescending { it.lastModified() }
-            ?.map { file ->
-                val extension = file.extension.lowercase()
+            ?.mapNotNull { file ->
                 val thumbnailFile = File(thumbnailDirectory, "${file.nameWithoutExtension}.jpg")
-                val thumbnail = thumbnailFile.takeIf { it.isFile } ?: createThumbnail(file) ?: file
+                val thumbnail = thumbnailFile.takeIf { it.isFile } ?: createThumbnail(file) ?: return@mapNotNull null
                 StoredWallpaper(
                     file = file,
-                    title = file.nameWithoutExtension.substringBefore("__")
-                        .replace("-", " ").take(48).ifBlank { "Wallpaper" },
+                    title = if (file.name.startsWith("preset_")) {
+                        when (file.nameWithoutExtension) {
+                            "preset_aurora" -> "Aurora"
+                            "preset_cosmos" -> "Eventide"
+                            "preset_dusk" -> "Afterglow"
+                            "preset_mono" -> "Monolith"
+                            else -> file.nameWithoutExtension
+                        }
+                    } else file.nameWithoutExtension.substringBefore("__").replace("-", " ").take(48),
                     thumbnail = thumbnail,
-                    isAnimated = extension == "gif" || extension == "mp4"
+                    isAnimated = file.extension.lowercase() in setOf("gif", "mp4"),
+                    isPreset = file.name.startsWith("preset_")
+                )
+            } ?: emptyList()
+    }
+
+    private fun downloadSecure(initialUrl: String, destination: File, maxBytes: Long) {
+        var current = URL(initialUrl)
+        repeat(MAX_REDIRECTS + 1) { redirectCount ->
+            if (current.protocol != "https" || current.host.lowercase() !in DOWNLOAD_HOSTS) {
+                throw IOException("The download URL is not trusted")
+            }
+            val connection = (current.openConnection() as HttpURLConnection).apply {
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = false
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "Kosmos-Android")
+                setRequestProperty("Accept", "image/jpeg,image/png,image/webp,image/gif,video/mp4")
+            }
+            try {
+                val status = connection.responseCode
+                if (status in REDIRECT_CODES) {
+                    if (redirectCount == MAX_REDIRECTS) throw IOException("Too many download redirects")
+                    val location = connection.getHeaderField("Location")
+                        ?: throw IOException("Invalid download redirect")
+                    current = URL(current, location)
+                    return@repeat
+                }
+                if (status != HttpURLConnection.HTTP_OK) throw IOException("Download failed (HTTP $status)")
+                if (current.host.lowercase() !in DOWNLOAD_HOSTS) throw IOException("Untrusted download host")
+                val contentLength = connection.contentLengthLong
+                if (contentLength > maxBytes) throw IOException("This download exceeds Kosmos' size limit")
+                connection.inputStream.use { input ->
+                    destination.outputStream().buffered().use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            if (total > maxBytes) throw IOException("This download exceeds Kosmos' size limit")
+                            output.write(buffer, 0, count)
+                        }
+                    }
+                }
+                return
+            } finally {
+                connection.disconnect()
+            }
+        }
+        if (!destination.isFile || destination.length() == 0L) throw IOException("Download could not be completed")
+    }
+
+    private fun createPreset(file: File, preset: Preset) {
+        val width = PRESET_WIDTH
+        val height = PRESET_HEIGHT
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val background = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
+                preset.colors, null, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), background)
+        background.shader = null
+
+        if (preset.style != 3) {
+            val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = android.graphics.RadialGradient(
+                    width * 0.72f, height * 0.36f, width * 0.8f,
+                    intArrayOf(preset.colors[2], Color.TRANSPARENT), null, Shader.TileMode.CLAMP
                 )
             }
-            ?: emptyList()
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), glow)
+            glow.shader = null
+        }
+
+        val random = Random(preset.fileName.hashCode())
+        val stars = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        val starCount = if (preset.style == 1) 180 else 72
+        repeat(starCount) {
+            val radius = if (preset.style == 1) random.nextFloat() * 2.2f + 0.5f else random.nextFloat() * 1.2f + 0.4f
+            stars.alpha = random.nextInt(45, 190)
+            canvas.drawCircle(random.nextFloat() * width, random.nextFloat() * height, radius, stars)
+        }
+
+        if (preset.style == 0 || preset.style == 2) {
+            val ridgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(75, 8, 12, 28)
+                style = Paint.Style.FILL
+            }
+            val ridge = Path().apply {
+                moveTo(0f, height * 0.68f)
+                cubicTo(width * 0.28f, height * 0.48f, width * 0.54f, height * 0.9f, width.toFloat(), height * 0.58f)
+                lineTo(width.toFloat(), height.toFloat())
+                lineTo(0f, height.toFloat())
+                close()
+            }
+            canvas.drawPath(ridge, ridgePaint)
+        }
+
+        if (preset.style == 3) {
+            val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(55, 235, 240, 250)
+                strokeWidth = 2f
+            }
+            for (index in 1..9) {
+                val y = height * index / 10f
+                canvas.drawLine(width * 0.12f, y, width * 0.88f, y, line)
+            }
+            canvas.drawCircle(width * 0.5f, height * 0.5f, width * 0.2f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(28, 255, 255, 255) })
+        }
+
+        file.outputStream().buffered().use {
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 94, it)) throw IOException("Couldn't create preset")
+        }
+        bitmap.recycle()
     }
 
     private fun resolveExtension(mimeType: String?, displayName: String): String {
@@ -109,14 +262,14 @@ class WallpaperStorage(private val context: Context) {
             "video/mp4" -> "mp4"
             else -> null
         }
-        val nameExtension = displayName.substringAfterLast('.', "")
-            .lowercase()
+        val nameExtension = displayName.substringAfterLast('.', "").lowercase()
             .takeIf { it in SUPPORTED_EXTENSIONS }
         return mimeExtension ?: nameExtension
             ?: throw IOException("Choose a JPG, PNG, WebP, GIF, or MP4 file")
     }
 
     private fun validateMedia(file: File, extension: String) {
+        if (!file.isFile || file.length() <= 0L) throw IOException("The selected media is empty")
         when (extension) {
             "jpg", "png", "webp" -> {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -127,23 +280,15 @@ class WallpaperStorage(private val context: Context) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     val drawable = ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) { decoder, info, _ ->
                         validateAnimatedDimensions(info.size.width, info.size.height)
-                        val scale = minOf(
-                            1f,
-                            MAX_GIF_DECODE_DIMENSION / maxOf(info.size.width, info.size.height).toFloat()
-                        )
-                        decoder.setTargetSize(
-                            (info.size.width * scale).toInt().coerceAtLeast(1),
-                            (info.size.height * scale).toInt().coerceAtLeast(1)
-                        )
+                        val scale = minOf(1f, MAX_GIF_DECODE_DIMENSION / max(info.size.width, info.size.height).toFloat())
+                        decoder.setTargetSize((info.size.width * scale).toInt().coerceAtLeast(1),
+                            (info.size.height * scale).toInt().coerceAtLeast(1))
                         decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
                     }
-                    if (drawable !is AnimatedImageDrawable) {
-                        throw IOException("The selected GIF is not animated or is unsupported")
-                    }
+                    if (drawable !is AnimatedImageDrawable) throw IOException("This GIF is not animated or is unsupported")
                 } else {
                     @Suppress("DEPRECATION")
-                    val movie = Movie.decodeFile(file.absolutePath)
-                        ?: throw IOException("This GIF could not be decoded")
+                    val movie = Movie.decodeFile(file.absolutePath) ?: throw IOException("This GIF could not be decoded")
                     validateAnimatedDimensions(movie.width(), movie.height())
                 }
             }
@@ -151,23 +296,15 @@ class WallpaperStorage(private val context: Context) {
                 val retriever = MediaMetadataRetriever()
                 try {
                     retriever.setDataSource(file.absolutePath)
-                    val width = retriever.extractMetadata(
-                        MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
-                    )?.toIntOrNull() ?: 0
-                    val height = retriever.extractMetadata(
-                        MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
-                    )?.toIntOrNull() ?: 0
-                    val duration = retriever.extractMetadata(
-                        MediaMetadataRetriever.METADATA_KEY_DURATION
-                    )?.toLongOrNull() ?: 0L
+                    val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                    val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                    val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
                     validateVideoDimensions(width, height)
-                    if (duration <= 0 || duration > MAX_VIDEO_DURATION_MS) {
-                        throw IOException("Videos must be no longer than 2 minutes")
-                    }
+                    if (duration <= 0 || duration > MAX_VIDEO_DURATION_MS) throw IOException("Videos must be no longer than 2 minutes")
                 } catch (error: RuntimeException) {
                     throw IOException("This video could not be decoded", error)
                 } finally {
-                    retriever.release()
+                    runCatching { retriever.release() }
                 }
             }
         }
@@ -184,9 +321,9 @@ class WallpaperStorage(private val context: Context) {
 
     private fun validateDimensions(width: Int, height: Int, maxDimension: Int, maxPixels: Long) {
         val pixels = width.toLong() * height.toLong()
-        if (width <= 0 || height <= 0 ||
-            width > maxDimension || height > maxDimension || pixels > maxPixels
-        ) throw IOException("This media has invalid or unsupported dimensions")
+        if (width <= 0 || height <= 0 || width > maxDimension || height > maxDimension || pixels > maxPixels) {
+            throw IOException("This media has invalid or unsupported dimensions")
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -198,35 +335,19 @@ class WallpaperStorage(private val context: Context) {
                 try {
                     retriever.setDataSource(file.absolutePath)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                        retriever.getScaledFrameAtTime(
-                            0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                            THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT
-                        )
+                        retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)
                     } else retriever.getFrameAtTime(0)
-                } catch (_: RuntimeException) {
-                    null
-                } finally {
-                    retriever.release()
-                }
+                } catch (_: RuntimeException) { null }
+                finally { runCatching { retriever.release() } }
             }
             "gif" -> {
                 val movie = Movie.decodeFile(file.absolutePath)
                 if (movie == null) null else {
-                    val scale = minOf(
-                        1f,
-                        THUMBNAIL_WIDTH.toFloat() / movie.width(),
-                        THUMBNAIL_HEIGHT.toFloat() / movie.height()
-                    )
-                    val frame = Bitmap.createBitmap(
-                        (movie.width() * scale).toInt().coerceAtLeast(1),
-                        (movie.height() * scale).toInt().coerceAtLeast(1),
-                        Bitmap.Config.ARGB_8888
-                    )
+                    val scale = minOf(1f, THUMBNAIL_WIDTH.toFloat() / movie.width(), THUMBNAIL_HEIGHT.toFloat() / movie.height())
+                    val frame = Bitmap.createBitmap((movie.width() * scale).toInt().coerceAtLeast(1),
+                        (movie.height() * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
                     movie.setTime(0)
-                    Canvas(frame).apply {
-                        scale(scale, scale)
-                        movie.draw(this, 0f, 0f)
-                    }
+                    Canvas(frame).apply { scale(scale, scale); movie.draw(this, 0f, 0f) }
                     frame
                 }
             }
@@ -235,51 +356,50 @@ class WallpaperStorage(private val context: Context) {
 
         return try {
             val temporary = File(output.parentFile, "${output.name}.part")
-            val success = temporary.outputStream().use {
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it)
-            }
-            if (success && temporary.renameTo(output)) output else {
-                temporary.delete()
-                null
-            }
-        } finally {
-            bitmap.recycle()
-        }
+            val success = temporary.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 86, it) }
+            if (success && temporary.renameTo(output)) output else { temporary.delete(); null }
+        } finally { bitmap.recycle() }
     }
 
     private fun createStaticThumbnail(file: File): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
+        val largest = max(bounds.outWidth, bounds.outHeight)
         var sampleSize = 1
-        while (bounds.outWidth / (sampleSize * 2) >= THUMBNAIL_WIDTH &&
-            bounds.outHeight / (sampleSize * 2) >= THUMBNAIL_HEIGHT
-        ) sampleSize *= 2
-
-        return BitmapFactory.decodeFile(
-            file.absolutePath,
-            BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            }
-        )
+        while (largest / (sampleSize * 2) >= max(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)) sampleSize *= 2
+        return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = Bitmap.Config.RGB_565
+        })
     }
 
     private fun queryDisplayName(uri: Uri): String =
-        context.contentResolver.query(
-            uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
-            } else "Wallpaper"
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else "Wallpaper"
         } ?: "Wallpaper"
+
+    private fun uniqueDestination(title: String, extension: String): File {
+        val safe = title.replace(Regex("\\s+"), "-")
+        return File(wallpaperDirectory, "${safe}__${UUID.randomUUID()}.$extension")
+    }
+
+    private fun sanitizeTitle(value: String): String =
+        value.replace(Regex("[^A-Za-z0-9 _-]"), "").trim().take(32).ifBlank { "Wallpaper" }
+
+    private fun extensionFromUrl(value: String): String =
+        URL(value).path.substringAfterLast('.', "").lowercase()
+
+    private fun maxBytesFor(extension: String) =
+        if (extension == "mp4") MAX_VIDEO_BYTES else MAX_IMAGE_BYTES
+
+    private data class Preset(val fileName: String, val title: String, val colors: IntArray, val style: Int)
 
     companion object {
         private const val MAX_IMAGE_BYTES = 40L * 1024L * 1024L
         private const val MAX_VIDEO_BYTES = 150L * 1024L * 1024L
         private const val MAX_IMAGE_DIMENSION = 12000
-        private const val MAX_IMAGE_PIXELS = 80_000_000L
+        private const val MAX_IMAGE_PIXELS = 60_000_000L
         private const val MAX_ANIMATED_DIMENSION = 4096
         private const val MAX_ANIMATED_PIXELS = 16_000_000L
         private const val MAX_VIDEO_DIMENSION = 4096
@@ -288,6 +408,13 @@ class WallpaperStorage(private val context: Context) {
         private const val MAX_GIF_DECODE_DIMENSION = 2048
         private const val THUMBNAIL_WIDTH = 512
         private const val THUMBNAIL_HEIGHT = 768
+        private const val PRESET_WIDTH = 1080
+        private const val PRESET_HEIGHT = 1920
+        private const val CONNECT_TIMEOUT_MS = 10_000
+        private const val READ_TIMEOUT_MS = 25_000
+        private const val MAX_REDIRECTS = 4
+        private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
+        private val DOWNLOAD_HOSTS = setOf("commons.wikimedia.org", "upload.wikimedia.org")
         private val SUPPORTED_EXTENSIONS = setOf("jpg", "png", "webp", "gif", "mp4")
     }
 }
