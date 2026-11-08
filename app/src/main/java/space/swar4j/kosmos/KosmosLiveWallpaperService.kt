@@ -119,7 +119,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             player = exo
             exo.repeatMode = Player.REPEAT_MODE_ONE
             exo.volume = 0f
-            exo.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            exo.setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             exo.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     if (player === exo) stopPlayback()
