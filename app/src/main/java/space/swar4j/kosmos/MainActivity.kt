@@ -80,9 +80,12 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             val permissionPrefs = getSharedPreferences("kosmos_settings", MODE_PRIVATE)
-            if (!permissionPrefs.getBoolean("notification_permission_requested", false)) {
+            val hasAskedBefore = permissionPrefs.getBoolean("notification_permission_requested", false)
+            if (!hasAskedBefore || shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
                 permissionPrefs.edit { putBoolean("notification_permission_requested", true) }
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                window.decorView.post {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
             }
         }
 
