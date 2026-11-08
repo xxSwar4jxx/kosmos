@@ -122,7 +122,9 @@ class WallpaperStorage(private val context: Context) {
             ?.sortedByDescending { it.lastModified() }
             ?.mapNotNull { file ->
                 val thumbnailFile = File(thumbnailDirectory, "${file.nameWithoutExtension}.jpg")
-                val thumbnail = thumbnailFile.takeIf { it.isFile } ?: createThumbnail(file) ?: return@mapNotNull null
+                val thumbnail = thumbnailFile.takeIf { it.isFile }
+                    ?: runCatching { createThumbnail(file) }.getOrNull()
+                    ?: return@mapNotNull null
                 StoredWallpaper(
                     file = file,
                     title = if (file.name.startsWith("preset_")) {
@@ -250,10 +252,13 @@ class WallpaperStorage(private val context: Context) {
                 Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(28, 255, 255, 255) })
         }
 
-        file.outputStream().buffered().use {
-            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 94, it)) throw IOException("Couldn't create preset")
+        try {
+            file.outputStream().buffered().use {
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 94, it)) throw IOException("Couldn't create preset")
+            }
+        } finally {
+            bitmap.recycle()
         }
-        bitmap.recycle()
     }
 
     private fun resolveExtension(mimeType: String?, displayName: String): String {

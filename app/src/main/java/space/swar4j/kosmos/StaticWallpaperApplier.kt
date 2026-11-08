@@ -13,11 +13,12 @@ enum class WallpaperDestination {
 }
 
 class StaticWallpaperApplier(context: Context) {
-    private val wallpaperManager = WallpaperManager.getInstance(context.applicationContext)
+    private val appContext = context.applicationContext
+    private val wallpaperManager = WallpaperManager.getInstance(appContext)
 
     suspend fun apply(file: java.io.File, destination: WallpaperDestination) {
         withContext(Dispatchers.IO) {
-            val wallpaperDirectory = java.io.File(context.filesDir, "wallpapers").canonicalFile
+            val wallpaperDirectory = java.io.File(appContext.filesDir, "wallpapers").canonicalFile
             val safeFile = runCatching { file.canonicalFile }.getOrNull()
             if (safeFile == null || !safeFile.isFile || !safeFile.canRead() ||
                 safeFile.parentFile != wallpaperDirectory ||
