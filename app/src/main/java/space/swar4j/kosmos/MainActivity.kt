@@ -137,6 +137,7 @@ private fun KosmosScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    var hasInternet by remember { mutableStateOf(false) }
     val connectivityManager = remember {
         context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     }
@@ -181,7 +182,6 @@ private fun KosmosScreen(
     var onlineResults by remember { mutableStateOf<List<OnlineWallpaperResult>>(emptyList()) }
     var onlineQuery by rememberSaveable { mutableStateOf("") }
     var isSearchingOnline by remember { mutableStateOf(false) }
-    var hasInternet by remember { mutableStateOf(false) }
     var selectedWallpaper by remember { mutableStateOf<StoredWallpaper?>(null) }
     var showApplyDialog by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
@@ -688,6 +688,8 @@ private fun OnlineSearchTile(
             )
             Spacer(Modifier.height(8.dp))
             Text(result.title, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+            Text(result.creator, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             Text(result.license, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             Spacer(Modifier.height(6.dp))
