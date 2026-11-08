@@ -56,7 +56,7 @@ object PlaybackFailureNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.kosmos_app_icon)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
             .setContentTitle("Kosmos wallpaper failed")
             .setContentText(failure.message)
             .setStyle(
