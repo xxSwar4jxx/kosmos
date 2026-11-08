@@ -184,6 +184,7 @@ private fun KosmosScreen(
     var isSearchingOnline by remember { mutableStateOf(false) }
     var selectedWallpaper by remember { mutableStateOf<StoredWallpaper?>(null) }
     var showApplyDialog by remember { mutableStateOf(false) }
+    var deleteAfterApply by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
     var isLoadingCatalogue by remember { mutableStateOf(false) }
     var downloadingId by remember { mutableStateOf<String?>(null) }
@@ -494,6 +495,23 @@ private fun KosmosScreen(
                                             }
                                         downloadingId = null
                                     }
+                                },
+                                onUseAsWallpaper = {
+                                    if (downloadingId != null) return@OnlineSearchTile
+                                    scope.launch {
+                                        downloadingId = "search-${result.id}"
+                                        runCatching { storage.downloadSearchResult(result) }
+                                            .onSuccess { downloaded ->
+                                                refreshLibrary()
+                                                deleteAfterApply = true
+                                                selectedWallpaper = downloaded
+                                                showApplyDialog = true
+                                            }
+                                            .onFailure {
+                                                snackbarHostState.showSnackbar(it.message ?: "Couldn't download wallpaper")
+                                            }
+                                        downloadingId = null
+                                    }
                                 }
                             )
                         }
@@ -504,7 +522,7 @@ private fun KosmosScreen(
     }
 
     selectedWallpaper?.let { wallpaper ->
-        Dialog(onDismissRequest = { selectedWallpaper = null }) {
+        Dialog(onDismissRequest = { selectedWallpaper = null; showApplyDialog = false; deleteAfterApply = false }) {
             Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
                 Column(Modifier.padding(16.dp)) {
                     AsyncImage(
@@ -570,7 +588,7 @@ private fun KosmosScreen(
 
     if (showApplyDialog && selectedWallpaper != null) {
         AlertDialog(
-            onDismissRequest = { showApplyDialog = false },
+            onDismissRequest = { showApplyDialog = false; deleteAfterApply = false },
             title = { Text("Apply wallpaper") },
             text = { Text("Where would you like to use this wallpaper?") },
             confirmButton = {
@@ -585,13 +603,25 @@ private fun KosmosScreen(
                             applyWallpaper(scope, applier, wallpaper, destination, snackbarHostState) {
                                 showApplyDialog = false
                                 selectedWallpaper = null
+                                if (deleteAfterApply) {
+                                    deleteAfterApply = false
+                                    scope.launch {
+                                        runCatching {
+                                            storage.deleteWallpaper(wallpaper.file)
+                                            metadata.remove(wallpaper.file.name)
+                                            refreshLibrary()
+                                        }.onFailure {
+                                            snackbarHostState.showSnackbar("Wallpaper applied, but its temporary download couldn't be removed")
+                                        }
+                                    }
+                                }
                             }
                         }) { Text(label) }
                     }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showApplyDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showApplyDialog = false; deleteAfterApply = false }) { Text("Cancel") }
             }
         )
     }
@@ -673,7 +703,8 @@ private fun WallpaperTile(
 private fun OnlineSearchTile(
     result: OnlineWallpaperResult,
     downloading: Boolean,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onUseAsWallpaper: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -693,9 +724,25 @@ private fun OnlineSearchTile(
             Text(result.license, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             Spacer(Modifier.height(6.dp))
-            Button(onClick = onDownload, enabled = !downloading, modifier = Modifier.fillMaxWidth()) {
-                if (downloading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Text("Download")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Button(
+                    onClick = onDownload,
+                    enabled = !downloading,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (downloading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Text("Download")
+                }
+                Button(
+                    onClick = onUseAsWallpaper,
+                    enabled = !downloading,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Use as wallpaper")
+                }
             }
         }
     }
