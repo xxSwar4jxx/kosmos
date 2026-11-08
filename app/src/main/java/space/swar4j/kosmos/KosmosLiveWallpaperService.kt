@@ -50,7 +50,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private var fallbackVisible = true
         private val videoLoadTimeout = Runnable {
             if (player != null && fallbackVisible) {
-                reportPlaybackFailure("The video did not start in time.")
+                reportPlaybackFailure(PlaybackError.VIDEO_START_TIMEOUT)
             }
         }
 
@@ -116,14 +116,14 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 LiveWallpaperLauncher.PREFERENCES,
                 MODE_PRIVATE
             ).getString(LiveWallpaperLauncher.ACTIVE_WALLPAPER_PATH, null)
-                ?: return reportPlaybackFailure("No live wallpaper is selected.")
+                ?: return reportPlaybackFailure(PlaybackError.NO_WALLPAPER_SELECTED)
 
             val file = runCatching { File(path).canonicalFile }.getOrNull()
-                ?: return reportPlaybackFailure("The selected wallpaper file could not be opened.")
+                ?: return reportPlaybackFailure(PlaybackError.FILE_ACCESS_FAILED)
             val wallpaperDirectory = File(filesDir, "wallpapers").canonicalFile
             if (!file.isFile || !file.canRead() || file.parentFile != wallpaperDirectory ||
                 file.extension.lowercase() !in setOf("gif", "mp4")) {
-                return reportPlaybackFailure("The selected wallpaper file is missing or unsupported.")
+                return reportPlaybackFailure(if (file.extension.lowercase() !in setOf("gif", "mp4")) PlaybackError.UNSUPPORTED_FILE_TYPE else PlaybackError.FILE_MISSING)
             }
 
             when (file.extension.lowercase()) {
@@ -137,7 +137,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             val exo = runCatching {
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService).build()
             }.getOrElse {
-                reportPlaybackFailure("The video player could not be started.")
+                reportPlaybackFailure(PlaybackError.VIDEO_PLAYER_INIT_FAILED)
                 return
             }
 
@@ -148,7 +148,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             exo.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     if (player === exo) {
-                        reportPlaybackFailure("The video could not be played.")
+                        reportPlaybackFailure(PlaybackError.VIDEO_PLAYBACK_FAILED)
                         stopVideoPlayer(exo)
                     }
                 }
@@ -168,7 +168,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 exo.playWhenReady = true
             }.onFailure {
                 if (player === exo) {
-                    reportPlaybackFailure("The video could not be prepared.")
+                    reportPlaybackFailure(PlaybackError.VIDEO_PREPARE_FAILED)
                     stopVideoPlayer(exo)
                 }
             }
@@ -186,7 +186,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                         @Suppress("DEPRECATION")
                         Movie.decodeFile(file.absolutePath)?.also { movie ->
                             validateGifDimensions(movie.width(), movie.height())
-                        } ?: throw IOException("This GIF could not be decoded")
+                        } ?: throw PlaybackFailureException(PlaybackError.GIF_DECODE_FAILED)
                     }
                 }
                 val decoded = decodeResult.getOrNull()
@@ -196,7 +196,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     gifDecodeTask = null
                     if (!isVisible || !surfaceWidthPositive()) return@post
                     if (decoded == null) {
-                        reportPlaybackFailure(decodeResult.exceptionOrNull()?.message ?: "The GIF could not be decoded.")
+                        reportPlaybackFailure((decodeResult.exceptionOrNull() as? PlaybackFailureException)?.failure ?: PlaybackError.GIF_DECODE_FAILED)
                         return@post
                     }
 
@@ -214,7 +214,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                                 fallbackVisible = false
                                 drawGifFrame()
                             } else {
-                                reportPlaybackFailure("This GIF format is not supported on this Android version.")
+                                reportPlaybackFailure(PlaybackError.GIF_UNSUPPORTED)
                             }
                         }
                     }
@@ -237,7 +237,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
             }
             if (decoded !is android.graphics.drawable.AnimatedImageDrawable) {
-                throw IOException("The selected GIF is not animated or is unsupported")
+                throw PlaybackFailureException(PlaybackError.GIF_UNSUPPORTED)
             }
             return decoded
         }
@@ -262,16 +262,21 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 width > MAX_GIF_SOURCE_DIMENSION || height > MAX_GIF_SOURCE_DIMENSION ||
                 pixels > MAX_GIF_SOURCE_PIXELS
             ) {
-                throw IOException("This GIF has unsupported dimensions")
+                throw PlaybackFailureException(PlaybackError.GIF_DIMENSIONS_INVALID)
             }
         }
 
         private fun surfaceWidthPositive(): Boolean =
             surfaceWidth > 0 && surfaceHeight > 0 && surfaceHolder.surface.isValid
 
-        private fun reportPlaybackFailure(message: String) {
+        private fun reportPlaybackFailure(failure: PlaybackError) {
             getSharedPreferences(LiveWallpaperLauncher.PREFERENCES, MODE_PRIVATE)
-                .edit().putString(LiveWallpaperLauncher.PLAYBACK_ERROR, message).apply()
+                .edit()
+                .putString(LiveWallpaperLauncher.PLAYBACK_ERROR, failure.message)
+                .putString(LiveWallpaperLauncher.PLAYBACK_ERROR_CODE, failure.code)
+                .putString(LiveWallpaperLauncher.PLAYBACK_ERROR_CATEGORY, failure.category)
+                .apply()
+            PlaybackFailureNotifier.show(this@KosmosLiveWallpaperService, failure)
             fallbackVisible = true
             drawFallback()
         }
