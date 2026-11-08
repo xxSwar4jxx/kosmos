@@ -504,7 +504,7 @@ private fun KosmosScreen(
                                             .onSuccess { downloaded ->
                                                 refreshLibrary()
                                                 deleteAfterApply = true
-                                                selectedWallpaper = downloaded
+                                                selectedWallpaper = if (downloaded.isAnimated) downloaded.copy(isAnimated = false) else downloaded
                                                 showApplyDialog = true
                                             }
                                             .onFailure {
@@ -578,7 +578,7 @@ private fun KosmosScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (wallpaper.isAnimated) "Preview live wallpaper" else "Apply wallpaper") }
-                    TextButton(onClick = { selectedWallpaper = null }, modifier = Modifier.align(Alignment.End)) {
+                    TextButton(onClick = { selectedWallpaper = null; showApplyDialog = false; deleteAfterApply = false }, modifier = Modifier.align(Alignment.End)) {
                         Text("Close")
                     }
                 }
