@@ -262,11 +262,12 @@ class KosmosLiveWallpaperService : WallpaperService() {
             player = null
         }
 
-        companion object {
-            private const val FRAME_INTERVAL_MS = 33L
-            private const val MAX_GIF_DECODE_DIMENSION = 2048
-            private const val MAX_GIF_SOURCE_DIMENSION = 4096
-            private const val MAX_GIF_SOURCE_PIXELS = 16_000_000L
-        }
+    }
+
+    private companion object {
+        private const val FRAME_INTERVAL_MS = 33L
+        private const val MAX_GIF_DECODE_DIMENSION = 2048
+        private const val MAX_GIF_SOURCE_DIMENSION = 4096
+        private const val MAX_GIF_SOURCE_PIXELS = 16_000_000L
     }
 }

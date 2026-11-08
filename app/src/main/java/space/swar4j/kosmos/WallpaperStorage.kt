@@ -192,7 +192,7 @@ class WallpaperStorage(private val context: Context) {
     @Suppress("DEPRECATION")
     private fun createThumbnail(file: File): File? {
         val output = File(thumbnailDirectory, "${file.nameWithoutExtension}.jpg")
-        val bitmap: Bitmap? = when (file.extension.lowercase()) {
+        val bitmap = when (file.extension.lowercase()) {
             "mp4" -> {
                 val retriever = MediaMetadataRetriever()
                 try {
