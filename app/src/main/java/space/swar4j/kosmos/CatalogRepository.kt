@@ -30,13 +30,17 @@ class CatalogRepository(context: Context) {
     suspend fun load(forceRefresh: Boolean = false): List<CatalogItem> = withContext(Dispatchers.IO) {
         if (forceRefresh || preferences.getString(KEY_JSON, null) == null) {
             runCatching { fetchCatalogue() }.onSuccess { json ->
-                preferences.edit { putString(KEY_JSON, json) }
+                if (hasValidDocumentStructure(json)) {
+                    preferences.edit { putString(KEY_JSON, json) }
+                }
             }
         }
         val cached = preferences.getString(KEY_JSON, null)
+            ?.takeIf(::hasValidDocumentStructure)
         val json = cached ?: runCatching {
             appContext.assets.open("catalogue.json").bufferedReader().use { it.readText() }
-        }.getOrNull() ?: return@withContext emptyList()
+        }.getOrNull()?.takeIf(::hasValidDocumentStructure)
+            ?: return@withContext emptyList()
         parse(json)
     }
 
@@ -69,6 +73,10 @@ class CatalogRepository(context: Context) {
             connection.disconnect()
         }
     }
+
+    private fun hasValidDocumentStructure(raw: String): Boolean = runCatching {
+        JSONObject(raw).optJSONArray("items") != null
+    }.getOrDefault(false)
 
     private fun parse(raw: String): List<CatalogItem> = runCatching {
         val entries = JSONObject(raw).optJSONArray("items") ?: JSONArray()
