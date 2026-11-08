@@ -84,7 +84,11 @@ class CatalogRepository(context: Context) {
                     creator = entry.optString("creator"),
                     license = entry.optString("license")
                 )
-                if (item.id.isBlank() || item.title.isBlank() || item.creator.isBlank() || item.license.isBlank()) continue
+                if (item.id.isBlank() || item.id.length > 80 || item.title.isBlank() || item.title.length > 64 ||
+                    item.category.length > 32 || item.creator.isBlank() || item.creator.length > 100 ||
+                    item.license.isBlank() || item.license.length > 64 || size >= MAX_ITEMS
+                ) continue
+                if (any { it.id == item.id }) continue
                 if (!isAllowedUrl(item.previewUrl, PREVIEW_HOSTS) ||
                     !isAllowedUrl(item.downloadUrl, DOWNLOAD_HOSTS) ||
                     !isAllowedUrl(item.sourceUrl, SOURCE_HOSTS)
@@ -96,7 +100,9 @@ class CatalogRepository(context: Context) {
 
     private fun isAllowedUrl(value: String, hosts: Set<String>): Boolean {
         val uri = runCatching { Uri.parse(value) }.getOrNull() ?: return false
-        return uri.scheme == "https" && uri.host?.lowercase()?.let(hosts::contains) == true
+        return uri.scheme == "https" && uri.userInfo == null &&
+            (uri.port == -1 || uri.port == 443) &&
+            uri.host?.lowercase()?.let(hosts::contains) == true
     }
 
     companion object {
@@ -106,6 +112,7 @@ class CatalogRepository(context: Context) {
         private const val MAX_CATALOGUE_BYTES = 512 * 1024L
         private const val CONNECT_TIMEOUT_MS = 8_000
         private const val READ_TIMEOUT_MS = 12_000
+        private const val MAX_ITEMS = 100
         private val PREVIEW_HOSTS = setOf("commons.wikimedia.org", "upload.wikimedia.org")
         private val DOWNLOAD_HOSTS = setOf("commons.wikimedia.org")
         private val SOURCE_HOSTS = setOf("commons.wikimedia.org")

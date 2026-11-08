@@ -377,6 +377,7 @@ private fun KosmosScreen(
                                         text = { Text(category) },
                                         onClick = {
                                             metadata.setCategory(wallpaper.file.name, category)
+                                            favoriteVersion++
                                             showCategoryMenu = false
                                         }
                                     )

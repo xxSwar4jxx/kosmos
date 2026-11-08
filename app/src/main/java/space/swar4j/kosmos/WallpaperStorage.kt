@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
@@ -114,6 +115,7 @@ class WallpaperStorage(private val context: Context) {
 
     suspend fun listWallpapers(): List<StoredWallpaper> = withContext(Dispatchers.IO) {
         wallpaperDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
+        thumbnailDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
         wallpaperDirectory.listFiles()
             ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS &&
                 runCatching { it.canonicalFile.parentFile == wallpaperDirectory.canonicalFile }.getOrDefault(false) }
@@ -142,7 +144,8 @@ class WallpaperStorage(private val context: Context) {
     private fun downloadSecure(initialUrl: String, destination: File, maxBytes: Long) {
         var current = URL(initialUrl)
         repeat(MAX_REDIRECTS + 1) { redirectCount ->
-            if (current.protocol != "https" || current.host.lowercase() !in DOWNLOAD_HOSTS) {
+            if (current.protocol != "https" || current.host.lowercase() !in DOWNLOAD_HOSTS ||
+                current.userInfo != null || (current.port != -1 && current.port != 443)) {
                 throw IOException("The download URL is not trusted")
             }
             val connection = (current.openConnection() as HttpURLConnection).apply {
@@ -287,6 +290,7 @@ class WallpaperStorage(private val context: Context) {
                     }
                     if (drawable !is AnimatedImageDrawable) throw IOException("This GIF is not animated or is unsupported")
                 } else {
+                    validateGifHeader(file)
                     @Suppress("DEPRECATION")
                     val movie = Movie.decodeFile(file.absolutePath) ?: throw IOException("This GIF could not be decoded")
                     validateAnimatedDimensions(movie.width(), movie.height())
@@ -340,17 +344,7 @@ class WallpaperStorage(private val context: Context) {
                 } catch (_: RuntimeException) { null }
                 finally { runCatching { retriever.release() } }
             }
-            "gif" -> {
-                val movie = Movie.decodeFile(file.absolutePath)
-                if (movie == null) null else {
-                    val scale = minOf(1f, THUMBNAIL_WIDTH.toFloat() / movie.width(), THUMBNAIL_HEIGHT.toFloat() / movie.height())
-                    val frame = Bitmap.createBitmap((movie.width() * scale).toInt().coerceAtLeast(1),
-                        (movie.height() * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-                    movie.setTime(0)
-                    Canvas(frame).apply { scale(scale, scale); movie.draw(this, 0f, 0f) }
-                    frame
-                }
-            }
+            "gif" -> createGifThumbnail(file)
             else -> createStaticThumbnail(file)
         } ?: return null
 
@@ -367,11 +361,51 @@ class WallpaperStorage(private val context: Context) {
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
         val largest = max(bounds.outWidth, bounds.outHeight)
         var sampleSize = 1
-        while (largest / (sampleSize * 2) >= max(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)) sampleSize *= 2
+        while (largest / sampleSize > max(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)) sampleSize *= 2
         return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
             inSampleSize = sampleSize
             inPreferredConfig = Bitmap.Config.RGB_565
         })
+    }
+
+    private fun createGifThumbnail(file: File): Bitmap? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, info, _ ->
+                validateAnimatedDimensions(info.size.width, info.size.height)
+                val scale = minOf(1f, max(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT) /
+                    max(info.size.width, info.size.height).toFloat())
+                decoder.setTargetSize(
+                    (info.size.width * scale).toInt().coerceAtLeast(1),
+                    (info.size.height * scale).toInt().coerceAtLeast(1)
+                )
+                decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
+            }
+        }
+        validateGifHeader(file)
+        @Suppress("DEPRECATION")
+        val movie = Movie.decodeFile(file.absolutePath) ?: return null
+        val scale = minOf(1f, THUMBNAIL_WIDTH.toFloat() / movie.width(), THUMBNAIL_HEIGHT.toFloat() / movie.height())
+        val frame = Bitmap.createBitmap(
+            (movie.width() * scale).toInt().coerceAtLeast(1),
+            (movie.height() * scale).toInt().coerceAtLeast(1),
+            Bitmap.Config.ARGB_8888
+        )
+        movie.setTime(0)
+        Canvas(frame).apply { scale(scale, scale); movie.draw(this, 0f, 0f) }
+        return frame
+    }
+
+    private fun validateGifHeader(file: File) {
+        val header = ByteArray(10)
+        RandomAccessFile(file, "r").use { input ->
+            if (input.length() < header.size) throw IOException("This GIF file is incomplete")
+            input.readFully(header)
+        }
+        val signature = String(header, 0, 6, Charsets.US_ASCII)
+        if (signature != "GIF87a" && signature != "GIF89a") throw IOException("Invalid GIF header")
+        val width = (header[6].toInt() and 0xFF) or ((header[7].toInt() and 0xFF) shl 8)
+        val height = (header[8].toInt() and 0xFF) or ((header[9].toInt() and 0xFF) shl 8)
+        validateAnimatedDimensions(width, height)
     }
 
     private fun queryDisplayName(uri: Uri): String =
