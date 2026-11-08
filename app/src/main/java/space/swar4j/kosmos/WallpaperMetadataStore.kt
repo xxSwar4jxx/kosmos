@@ -34,7 +34,7 @@ class WallpaperMetadataStore(context: Context) {
     }
 
     companion object {
-        val CATEGORIES = listOf("Nature", "Space", "Abstract", "Minimal", "Unsorted")
+        val CATEGORIES = listOf("Nature", "Space", "Abstract", "Minimal", "Anime", "Unsorted")
         private const val KEY_FAVORITES = "favorites"
         private fun categoryKey(fileName: String) = "category:$fileName"
     }
