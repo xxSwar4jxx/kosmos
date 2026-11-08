@@ -24,7 +24,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -51,6 +50,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private val videoLoadTimeout = Runnable {
             if (player != null && fallbackVisible) {
                 reportPlaybackFailure(PlaybackError.VIDEO_START_TIMEOUT)
+                player?.let(::stopVideoPlayer)
             }
         }
 
