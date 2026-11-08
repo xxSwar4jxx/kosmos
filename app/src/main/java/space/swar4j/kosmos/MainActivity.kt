@@ -52,13 +52,13 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val storage = WallpaperStorage(applicationContext)
         val applier = StaticWallpaperApplier(applicationContext)
+        val liveLauncher = LiveWallpaperLauncher(applicationContext)
 
         setContent {
             var darkTheme by remember { mutableStateOf(true) }
@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
                 KosmosScreen(
                     storage = storage,
                     applier = applier,
+                    liveLauncher = liveLauncher,
                     darkTheme = darkTheme,
                     onThemeChange = { darkTheme = it }
                 )
@@ -78,6 +79,7 @@ class MainActivity : ComponentActivity() {
 private fun KosmosScreen(
     storage: WallpaperStorage,
     applier: StaticWallpaperApplier,
+    liveLauncher: LiveWallpaperLauncher,
     darkTheme: Boolean,
     onThemeChange: (Boolean) -> Unit
 ) {
@@ -94,7 +96,7 @@ private fun KosmosScreen(
         if (uri != null) {
             scope.launch {
                 isImporting = true
-                runCatching { storage.importImage(uri) }
+                runCatching { storage.importMedia(uri) }
                     .onSuccess { imported ->
                         wallpapers = withContext(Dispatchers.IO) { storage.listWallpapers() }
                         selectedWallpaper = imported
@@ -102,7 +104,7 @@ private fun KosmosScreen(
                     }
                     .onFailure { error ->
                         snackbarHostState.showSnackbar(
-                            error.message ?: "Couldn't import this image"
+                            error.message ?: "Couldn't import this file"
                         )
                     }
                 isImporting = false
@@ -168,7 +170,9 @@ private fun KosmosScreen(
                 EmptyLibrary(
                     isImporting = isImporting,
                     onImport = {
-                        importLauncher.launch(arrayOf("image/jpeg", "image/png", "image/webp"))
+                        importLauncher.launch(arrayOf(
+                            "image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"
+                        ))
                     },
                     modifier = Modifier.weight(1f)
                 )
@@ -191,7 +195,9 @@ private fun KosmosScreen(
 
             Button(
                 onClick = {
-                    importLauncher.launch(arrayOf("image/jpeg", "image/png", "image/webp"))
+                    importLauncher.launch(arrayOf(
+                        "image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"
+                    ))
                 },
                 enabled = !isImporting,
                 modifier = Modifier
@@ -213,7 +219,7 @@ private fun KosmosScreen(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     AsyncImage(
-                        model = wallpaper.file,
+                        model = wallpaper.thumbnail,
                         contentDescription = wallpaper.title,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -225,10 +231,31 @@ private fun KosmosScreen(
                     Text(wallpaper.title, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = { showApplyDialog = true },
+                        onClick = {
+                            if (wallpaper.isAnimated) {
+                                runCatching { liveLauncher.launch(wallpaper.file) }
+                                    .onSuccess {
+                                        selectedWallpaper = null
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                "Continue in Android's wallpaper preview"
+                                            )
+                                        }
+                                    }
+                                    .onFailure { error ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                error.message ?: "Couldn't open live wallpaper preview"
+                                            )
+                                        }
+                                    }
+                            } else {
+                                showApplyDialog = true
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Apply wallpaper")
+                        Text(if (wallpaper.isAnimated) "Preview live wallpaper" else "Apply wallpaper")
                     }
                     TextButton(
                         onClick = { selectedWallpaper = null },
@@ -324,13 +351,13 @@ private fun EmptyLibrary(
             Text("A blank canvas", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Import an image to start your collection.",
+                "Import an image, GIF, or video to start your collection.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = onImport, enabled = !isImporting) {
-                Text("Choose an image")
+                Text("Choose a wallpaper")
             }
         }
     }
@@ -352,19 +379,34 @@ private fun WallpaperTile(
     ) {
         Column {
             AsyncImage(
-                model = wallpaper.file,
+                model = wallpaper.thumbnail,
                 contentDescription = wallpaper.title,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(0.78f),
                 contentScale = ContentScale.Crop
             )
-            Text(
-                text = wallpaper.title,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = wallpaper.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
+                )
+                if (wallpaper.isAnimated) {
+                    Text(
+                        text = "LIVE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
     }
 }
