@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   debug-apk:
@@ -53,9 +53,12 @@ jobs:
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+      - name: Publish direct APK download
+        if: success() && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
         with:
-          name: kosmos-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          tag_name: kosmos-build-${{ github.run_number }}-${{ github.run_attempt }}
+          name: Kosmos build ${{ github.run_number }}
+          prerelease: true
+          make_latest: false
+          files: app/build/outputs/apk/debug/app-debug.apk
