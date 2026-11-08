@@ -61,14 +61,22 @@ class MainActivity : ComponentActivity() {
         val liveLauncher = LiveWallpaperLauncher(applicationContext)
 
         setContent {
-            var darkTheme by remember { mutableStateOf(true) }
+            val themePreferences = remember {
+                getSharedPreferences("kosmos_settings", MODE_PRIVATE)
+            }
+            var darkTheme by rememberSaveable {
+                mutableStateOf(themePreferences.getBoolean("dark_theme", true))
+            }
             KosmosTheme(darkTheme = darkTheme) {
                 KosmosScreen(
                     storage = storage,
                     applier = applier,
                     liveLauncher = liveLauncher,
                     darkTheme = darkTheme,
-                    onThemeChange = { darkTheme = it }
+                    onThemeChange = {
+                        darkTheme = it
+                        themePreferences.edit().putBoolean("dark_theme", it).apply()
+                    }
                 )
             }
         }

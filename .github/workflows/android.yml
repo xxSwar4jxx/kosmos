@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   debug-apk:
     runs-on: ubuntu-latest
@@ -22,16 +25,23 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools platforms;android-36 build-tools;36.0.0
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
 
+      - name: Verify toolchain
+        run: |
+          java -version
+          gradle --version
+          sdkmanager --list_installed
+
       - name: Build debug APK
-        run: gradle assembleDebug
+        run: gradle --no-daemon --stacktrace assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
