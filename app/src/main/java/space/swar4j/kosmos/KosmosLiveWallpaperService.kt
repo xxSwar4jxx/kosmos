@@ -512,7 +512,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                         val targetHeight = targetWidth * logo.height / logo.width.toFloat()
                         val destination = RectF(
                             centerX - targetWidth / 2f,
-                            centerY - unit * 0.45f,
+                            centerY - unit * 0.62f,
                             centerX + targetWidth / 2f,
                             centerY - unit * 0.45f + targetHeight
                         )
@@ -527,11 +527,11 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     }
                     canvas.drawText(
                         "If you can see this then the wallpaper didn't load properly.",
-                        centerX, centerY + unit * 0.10f, messagePaint
+                        centerX, centerY + unit * 0.18f, messagePaint
                     )
                     canvas.drawText(
                         "Please Try Again.",
-                        centerX, centerY + unit * 0.145f, messagePaint
+                        centerX, centerY + unit * 0.23f, messagePaint
                     )
                 }
             } catch (_: RuntimeException) {
