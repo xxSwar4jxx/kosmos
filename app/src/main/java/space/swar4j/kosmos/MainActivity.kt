@@ -77,6 +77,7 @@ import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -132,14 +133,21 @@ class MainActivity : ComponentActivity() {
         val metadata = WallpaperMetadataStore(applicationContext)
         val catalogue = CatalogRepository(applicationContext)
 
+        val appSettings = getSharedPreferences("arka_settings", MODE_PRIVATE)
         setContent {
-            KosmosTheme {
+            var themeMode by rememberSaveable { mutableStateOf(appSettings.getString("theme_mode", "default") ?: "default") }
+            KosmosTheme(themeMode = themeMode) {
                 KosmosScreen(
                     storage = storage,
                     applier = applier,
                     liveLauncher = liveLauncher,
                     metadata = metadata,
-                    catalogue = catalogue
+                    catalogue = catalogue,
+                    themeMode = themeMode,
+                    onThemeModeChange = { selected ->
+                        themeMode = selected
+                        appSettings.edit { putString("theme_mode", selected) }
+                    }
                 )
             }
         }
@@ -152,7 +160,9 @@ private fun KosmosScreen(
     applier: StaticWallpaperApplier,
     liveLauncher: LiveWallpaperLauncher,
     metadata: WallpaperMetadataStore,
-    catalogue: CatalogRepository
+    catalogue: CatalogRepository,
+    themeMode: String,
+    onThemeModeChange: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -222,6 +232,10 @@ private fun KosmosScreen(
     var filter by rememberSaveable { mutableStateOf("All") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showCategoryMenu by remember { mutableStateOf(false) }
+    var settingsSection by rememberSaveable { mutableStateOf("General") }
+    val settings = remember { context.getSharedPreferences("arka_settings", android.content.Context.MODE_PRIVATE) }
+    var applyPresetTo by rememberSaveable { mutableStateOf(settings.getString("apply_presets_to", "ask") ?: "ask") }
+    var showNsfwSetting by rememberSaveable { mutableStateOf(false) }
 
     val performOnlineSearch: () -> Unit = {
         if (hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline) {
@@ -346,6 +360,9 @@ private fun KosmosScreen(
                     modifier = Modifier.weight(1f).height(72.dp),
                     contentScale = ContentScale.Fit
                 )
+                IconButton(onClick = { tab = "Settings"; settingsSection = "General" }) {
+                    Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurface)
+                }
                 OutlinedTextField(
                     value = onlineQuery,
                     onValueChange = { onlineQuery = it },
@@ -373,7 +390,84 @@ private fun KosmosScreen(
             }
             Spacer(Modifier.height(12.dp))
 
-            if (tab == "Home") {
+            if (tab == "Settings") {
+                Column(Modifier.weight(1f).fillMaxWidth()) {
+                    Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("General", "About").forEach { section ->
+                            FilterChip(selected = settingsSection == section, onClick = { settingsSection = section }, label = { Text(section) })
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    if (settingsSection == "General") {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+                            item {
+                                SettingsGroup(title = "Appearance") {
+                                    SettingsDropdown(
+                                        title = "Theme",
+                                        selected = themeMode,
+                                        options = listOf("default" to "Default (Amber)", "light" to "Light", "dark" to "Dark", "system" to "Follow system"),
+                                        onSelected = onThemeModeChange
+                                    )
+                                }
+                            }
+                            item {
+                                SettingsGroup(title = "Wallpaper behavior") {
+                                    SettingsDropdown(
+                                        title = "Apply presets to",
+                                        selected = applyPresetTo,
+                                        options = listOf("home" to "Home screen", "lock" to "Lock screen", "both" to "Both", "ask" to "Ask every time"),
+                                        onSelected = {
+                                            applyPresetTo = it
+                                            settings.edit { putString("apply_presets_to", it) }
+                                        }
+                                    )
+                                }
+                            }
+                            item {
+                                SettingsGroup(title = "Content") {
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("Safe-for-work image search", style = MaterialTheme.typography.titleSmall)
+                                            Text("Explicit results are not available in Arka.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        androidx.compose.material3.Switch(checked = true, onCheckedChange = null, enabled = false)
+                                    }
+                                }
+                            }
+                            item {
+                                SettingsGroup(title = "Library") {
+                                    Text("Images selected from your gallery are copied into Arka, so they remain available in your library and presets.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+                            item {
+                                SettingsGroup(title = "Arka") {
+                                    Text("Arka is a wallpaper app by ZeroTech for discovering, organizing, and applying static and live wallpapers.", style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("Choose wallpapers from your gallery, explore online artwork, save favorites, and manage your own presets.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            item {
+                                SettingsGroup(title = "ZeroTech") {
+                                    Text("ZeroTech is the team behind Arka and its supporting projects.", style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(Modifier.height(8.dp))
+                                    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                                    TextButton(onClick = { uriHandler.openUri("https://swar4j.space") }) { Text("swar4j.space") }
+                                    TextButton(onClick = { uriHandler.openUri("https://github.com/xxSwar4jxx") }) { Text("GitHub · @xxSwar4jxx") }
+                                    TextButton(onClick = { uriHandler.openUri("https://github.com/xxSwar4jxx/kosmos") }) { Text("Arka source code") }
+                                }
+                            }
+                            item {
+                                Text("Arka · Made by ZeroTech", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            } else if (tab == "Home") {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(bottom = 18.dp),
@@ -671,7 +765,18 @@ private fun KosmosScreen(
                                         runCatching { liveLauncher.launch(wallpaper.file) }
                                             .onFailure { scope.launch { snackbarHostState.showSnackbar(it.message ?: "Couldn't open live wallpaper") } }
                                     } else {
-                                        applyWallpaper(scope, applier, wallpaper, WallpaperDestination.BOTH, snackbarHostState) { }
+                                        val destination = when (applyPresetTo) {
+                                            "home" -> WallpaperDestination.HOME
+                                            "lock" -> WallpaperDestination.LOCK
+                                            "both" -> WallpaperDestination.BOTH
+                                            else -> null
+                                        }
+                                        if (destination == null) {
+                                            selectedWallpaper = wallpaper
+                                            showApplyDialog = true
+                                        } else {
+                                            applyWallpaper(scope, applier, wallpaper, destination, snackbarHostState) { }
+                                        }
                                     }
                                 },
                                 onRemove = {
@@ -882,11 +987,14 @@ private fun KosmosScreen(
             text = { Text("Where would you like to use this wallpaper?") },
             confirmButton = {
                 Column(horizontalAlignment = Alignment.End) {
-                    listOf(
+                    val destinations = if (tab == "Presets" && applyPresetTo != "ask") {
+                        emptyList()
+                    } else listOf(
                         "Home screen" to WallpaperDestination.HOME,
                         "Lock screen" to WallpaperDestination.LOCK,
                         "Both" to WallpaperDestination.BOTH
-                    ).forEach { (label, destination) ->
+                    )
+                    destinations.forEach { (label, destination) ->
                         TextButton(onClick = {
                             val wallpaper = selectedWallpaper ?: return@TextButton
                             applyWallpaper(scope, applier, wallpaper, destination, snackbarHostState) {
@@ -1257,3 +1365,42 @@ private fun applyWallpaper(
 private val SUPPORTED_MIME_TYPES = arrayOf(
     "image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"
 )
+
+@Composable
+private fun SettingsGroup(title: String, content: @Composable Column.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingsDropdown(
+    title: String,
+    selected: String,
+    options: List<Pair<String, String>>,
+    onSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = options.firstOrNull { it.first == selected }?.second ?: options.first().second
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+        Box {
+            TextButton(onClick = { expanded = true }) { Text(label) }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                options.forEach { (value, optionLabel) ->
+                    DropdownMenuItem(text = { Text(optionLabel) }, onClick = {
+                        expanded = false
+                        onSelected(value)
+                    })
+                }
+            }
+        }
+    }
+}
