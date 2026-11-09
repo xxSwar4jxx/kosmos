@@ -49,7 +49,11 @@ class WallpaperStorage(private val context: Context) {
             Preset("preset_aurora.jpg", "Aurora", intArrayOf(0xFF071C2C.toInt(), 0xFF146B68.toInt(), 0xFFB6A0C8.toInt()), 0),
             Preset("preset_cosmos.jpg", "Eventide", intArrayOf(0xFF080B20.toInt(), 0xFF283D75.toInt(), 0xFFB45B8A.toInt()), 1),
             Preset("preset_dusk.jpg", "Afterglow", intArrayOf(0xFF311B38.toInt(), 0xFFB65D62.toInt(), 0xFFF0B477.toInt()), 2),
-            Preset("preset_mono.jpg", "Monolith", intArrayOf(0xFF101318.toInt(), 0xFF444B57.toInt(), 0xFF9CA4B1.toInt()), 3)
+            Preset("preset_mono.jpg", "Monolith", intArrayOf(0xFF101318.toInt(), 0xFF444B57.toInt(), 0xFF9CA4B1.toInt()), 3),
+            Preset("preset_solar.jpg", "Solar Flare", intArrayOf(0xFF24101B.toInt(), 0xFFFF7A18.toInt(), 0xFFFFD166.toInt()), 4),
+            Preset("preset_violet.jpg", "Violet Horizon", intArrayOf(0xFF100D2B.toInt(), 0xFF713C91.toInt(), 0xFFE38BCB.toInt()), 5),
+            Preset("preset_ocean.jpg", "Deep Current", intArrayOf(0xFF041D2A.toInt(), 0xFF087E8B.toInt(), 0xFF9AE6D7.toInt()), 6),
+            Preset("preset_ember.jpg", "Ember", intArrayOf(0xFF1A0C12.toInt(), 0xFF9E293F.toInt(), 0xFFFFA552.toInt()), 7)
         )
         presets.forEach { preset ->
             val file = File(wallpaperDirectory, preset.fileName)
@@ -147,6 +151,23 @@ class WallpaperStorage(private val context: Context) {
             destination.delete()
             throw error
         }
+    }
+
+    suspend fun renameWallpaper(file: File, requestedTitle: String): StoredWallpaper = withContext(Dispatchers.IO) {
+        val safeFile = file.canonicalFile
+        if (safeFile.parentFile != wallpaperDirectory.canonicalFile || safeFile.name.startsWith("preset_")) {
+            throw IOException("This wallpaper cannot be renamed")
+        }
+        val title = sanitizeTitle(requestedTitle)
+        if (title.isBlank()) throw IOException("Enter a valid wallpaper name")
+        val destination = uniqueDestination(title, safeFile.extension)
+        if (!safeFile.renameTo(destination)) throw IOException("Couldn't rename this wallpaper")
+        val oldThumbnail = File(thumbnailDirectory, "${safeFile.nameWithoutExtension}.jpg")
+        val newThumbnail = File(thumbnailDirectory, "${destination.nameWithoutExtension}.jpg")
+        if (oldThumbnail.exists()) oldThumbnail.renameTo(newThumbnail)
+        val thumbnail = newThumbnail.takeIf { it.isFile } ?: createThumbnail(destination)
+            ?: throw IOException("Wallpaper renamed, but its preview couldn't be created")
+        StoredWallpaper(destination, title, thumbnail, destination.extension.lowercase() in setOf("gif", "mp4"))
     }
 
     suspend fun deleteWallpaper(file: File) = withContext(Dispatchers.IO) {
