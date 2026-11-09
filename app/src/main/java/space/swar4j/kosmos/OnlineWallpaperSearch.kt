@@ -52,11 +52,20 @@ class OnlineWallpaperSearch {
             val (openverse, commons) = fetchFor(clean)
             var combined = openverse.getOrDefault(emptyList()) + commons.getOrDefault(emptyList())
 
-            // Broaden low-yield searches with a wallpaper-specific variant.
+            // Retry low-yield searches with two broader phrases. Keep provider calls
+            // concurrent, and only pay this cost when the original query is sparse.
             if (combined.size < 8 && safePage == 1) {
-                val expanded = fetchFor("$clean wallpaper")
-                combined += expanded.first.getOrDefault(emptyList())
-                combined += expanded.second.getOrDefault(emptyList())
+                val fallbackQueries = listOf(
+                    "$clean wallpaper",
+                    terms.take(2).joinToString(" ") + " wallpaper"
+                ).map { it.trim() }.distinct().filter { it.isNotBlank() && !it.equals(clean, true) }
+                val expanded = coroutineScope {
+                    fallbackQueries.map { phrase -> async { fetchFor(phrase) } }.awaitAll()
+                }
+                expanded.forEach { pair ->
+                    combined += pair.first.getOrDefault(emptyList())
+                    combined += pair.second.getOrDefault(emptyList())
+                }
             }
 
             if (openverse.isFailure && commons.isFailure && combined.isEmpty()) {
@@ -212,7 +221,7 @@ class OnlineWallpaperSearch {
             requestMethod = "GET"
             setRequestProperty(
                 "User-Agent",
-                "ArkaAndroid/0.8 (wallpaper search; https://github.com/xxSwar4jxx/kosmos)"
+                "ArkaAndroid/0.9.1 (wallpaper search; https://github.com/xxSwar4jxx/kosmos)"
             )
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Referer", referer)
