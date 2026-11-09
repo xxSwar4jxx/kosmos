@@ -38,27 +38,36 @@ class OnlineWallpaperSearch {
             if (terms.isEmpty()) return@withContext emptyList()
 
             val safePage = page.coerceAtLeast(1)
-            val (openverse, commons) = coroutineScope {
-                val openverseCall = async { runCatching { searchOpenverse(clean, terms, safePage) } }
-                val commonsCall = async { runCatching { searchCommons(clean, terms, safePage) } }
-                openverseCall.await() to commonsCall.await()
+            suspend fun fetchFor(searchText: String): Pair<Result<List<OnlineWallpaperResult>>, Result<List<OnlineWallpaperResult>>> =
+                coroutineScope {
+                    val searchTerms = searchText.lowercase()
+                        .split(Regex("[^\\p{L}\\p{N}]+"))
+                        .filter { it.length > 1 }
+                        .distinct()
+                    val openverseCall = async { runCatching { searchOpenverse(searchText, searchTerms, safePage) } }
+                    val commonsCall = async { runCatching { searchCommons(searchText, searchTerms, safePage) } }
+                    openverseCall.await() to commonsCall.await()
+                }
+
+            val (openverse, commons) = fetchFor(clean)
+            var combined = openverse.getOrDefault(emptyList()) + commons.getOrDefault(emptyList())
+
+            // Broaden low-yield searches with a wallpaper-specific variant.
+            if (combined.size < 8 && safePage == 1) {
+                val expanded = fetchFor("$clean wallpaper")
+                combined += expanded.first.getOrDefault(emptyList())
+                combined += expanded.second.getOrDefault(emptyList())
             }
 
-            if (openverse.isFailure && commons.isFailure) {
+            if (openverse.isFailure && commons.isFailure && combined.isEmpty()) {
                 throw IOException("Image search providers are unavailable. Please try again.")
             }
 
-            (openverse.getOrDefault(emptyList()) + commons.getOrDefault(emptyList()))
-                .distinctBy { it.downloadUrl.substringBefore('?') }
+            combined.distinctBy { it.downloadUrl.substringBefore('?') }
                 .sortedByDescending { result ->
-                    val title = result.title.lowercase()
-                    terms.sumOf { term ->
-                        when {
-                            title == term -> 8
-                            title.contains(term) -> 4
-                            else -> 0
-                        }
-                    }
+                    val titleScore = relevanceScore(result.title, terms)
+                    val exactPhraseBonus = if (result.title.contains(clean, ignoreCase = true)) 4 else 0
+                    titleScore * 4 + exactPhraseBonus
                 }
                 .take(40)
         }
