@@ -780,11 +780,20 @@ private fun KosmosScreen(
             onDismissRequest = { showAddPresetDialog = false },
             title = { Text("Add a preset") },
             text = {
-                if (wallpapers.isEmpty()) {
-                    Text("Import a wallpaper first.")
+                val availableToSave = wallpapers.filterNot { it.isPreset || metadata.isPreset(it.file.name) }
+                if (availableToSave.isEmpty()) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Import a wallpaper before adding it to Presets.")
+                        TextButton(onClick = {
+                            showAddPresetDialog = false
+                            galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                            ))
+                        }) { Text("Import from gallery") }
+                    }
                 } else {
                     LazyColumn(Modifier.height(280.dp)) {
-                        items(wallpapers.filterNot { it.isPreset || metadata.isPreset(it.file.name) }, key = { it.file.name }) { wallpaper ->
+                        items(availableToSave, key = { it.file.name }) { wallpaper ->
                             TextButton(
                                 onClick = {
                                     metadata.setPreset(wallpaper.file.name, true)
