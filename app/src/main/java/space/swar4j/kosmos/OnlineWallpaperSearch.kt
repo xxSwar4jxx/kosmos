@@ -39,13 +39,25 @@ class OnlineWallpaperSearch {
             if (terms.isEmpty()) return@withContext emptyList()
 
             val safePage = page.coerceAtLeast(1)
-            val (animeResults, generalProviders) = coroutineScope {
-                val animeCall = async { runCatching { searchAnimeProviders(clean, safePage) }.getOrDefault(emptyList()) }
-                val openverseCall = async { runCatching { searchOpenverse(clean, terms, safePage) }.getOrDefault(emptyList()) }
-                val commonsCall = async { runCatching { searchCommons(clean, terms, safePage) }.getOrDefault(emptyList()) }
-                animeCall.await() to (openverseCall.await() to commonsCall.await())
+
+            // AniList has strict priority: when it returns character artwork,
+            // do not query or mix in results from any other provider.
+            val aniListResults = runCatching { searchAniListResults(clean) }
+                .getOrDefault(emptyList())
+
+            val selected = if (aniListResults.isNotEmpty()) {
+                aniListResults
+            } else {
+                coroutineScope {
+                    val animeCall = async { runCatching { searchAnimeProviders(clean, safePage) }.getOrDefault(emptyList()) }
+                    val openverseCall = async { runCatching { searchOpenverse(clean, terms, safePage) }.getOrDefault(emptyList()) }
+                    val commonsCall = async { runCatching { searchCommons(clean, terms, safePage) }.getOrDefault(emptyList()) }
+                    val anime = animeCall.await()
+                    if (anime.isNotEmpty()) anime
+                    else openverseCall.await() + commonsCall.await()
+                }
             }
-            val selected = if (animeResults.isNotEmpty()) animeResults else generalProviders.first + generalProviders.second
+
             if (selected.isEmpty()) throw IOException("Image search providers are unavailable. Please try again.")
             selected.distinctBy { it.downloadUrl.substringBefore('?') }
                 .sortedByDescending { result ->
@@ -56,6 +68,23 @@ class OnlineWallpaperSearch {
         }
 
     private data class AnimeCharacter(val name: String, val series: String, val image: String)
+
+    private suspend fun searchAniListResults(query: String): List<OnlineWallpaperResult> {
+        val animeSearch = query.replace(
+            Regex("\\b(wallpaper|wallpapers|background|image|images|picture|pictures|4k|uhd|hd|anime|illustration|art)\\b", RegexOption.IGNORE_CASE),
+            " "
+        ).replace(Regex("\\s+"), " ").trim().ifBlank { query }
+
+        return searchAniListCharacters(animeSearch).mapNotNull { character ->
+            if (!isSecureImageUrl(character.image)) return@mapNotNull null
+            OnlineWallpaperResult(
+                id = "anilist-${character.name.hashCode()}",
+                title = if (character.series.isBlank()) character.name else "${character.name} • ${character.series}",
+                previewUrl = character.image, downloadUrl = character.image, fileExtension = "jpg",
+                creator = "AniList character artwork", license = "See original AniList source"
+            )
+        }
+    }
 
     private suspend fun searchAnimeProviders(query: String, page: Int): List<OnlineWallpaperResult> {
         val allowCosplay = query.contains("cosplay", ignoreCase = true)
@@ -71,20 +100,10 @@ class OnlineWallpaperSearch {
                 if (character.series.isNotBlank()) add((character.name + " " + character.series).toDanbooruTagQuery(allowCosplay))
             }
         }.filter { it.isNotBlank() }.distinct().take(8)
-        val danbooru = coroutineScope {
+        return coroutineScope {
             tagQueries.map { tags -> async { runCatching { searchDanbooru(tags, page) }.getOrDefault(emptyList()) } }
                 .awaitAll().flatten()
         }.distinctBy { it.id }.take(32)
-        val anilist = characters.mapNotNull { character ->
-            if (!isSecureImageUrl(character.image)) return@mapNotNull null
-            OnlineWallpaperResult(
-                id = "anilist-${character.name.hashCode()}",
-                title = if (character.series.isBlank()) character.name else "${character.name} • ${character.series}",
-                previewUrl = character.image, downloadUrl = character.image, fileExtension = "jpg",
-                creator = "AniList character artwork", license = "See original AniList source"
-            )
-        }
-        return (danbooru + anilist).distinctBy { it.downloadUrl.substringBefore('?') }
     }
 
     private fun searchAniListCharacters(queryText: String): List<AnimeCharacter> {
