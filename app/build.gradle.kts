@@ -4,9 +4,39 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val arkaKeystorePath = System.getenv("ARKA_KEYSTORE_FILE")
+val arkaStorePassword = System.getenv("ARKA_KEYSTORE_PASSWORD")
+val arkaKeyAlias = System.getenv("ARKA_KEY_ALIAS")
+val arkaKeyPassword = System.getenv("ARKA_KEY_PASSWORD")
+val hasPersistentSigning = listOf(
+    arkaKeystorePath,
+    arkaStorePassword,
+    arkaKeyAlias,
+    arkaKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "space.swar4j.kosmos"
     compileSdk = 36
+
+    signingConfigs {
+        if (hasPersistentSigning) {
+            create("persistentDebug") {
+                storeFile = file(arkaKeystorePath!!)
+                storePassword = arkaStorePassword
+                keyAlias = arkaKeyAlias
+                keyPassword = arkaKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            if (hasPersistentSigning) {
+                signingConfig = signingConfigs.getByName("persistentDebug")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "space.swar4j.kosmos"
