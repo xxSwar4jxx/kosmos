@@ -62,7 +62,7 @@ class OnlineWallpaperSearch {
 
     private data class AnimeCharacter(val name: String, val series: String, val image: String)
 
-    private fun searchAnimeProviders(query: String, page: Int): List<OnlineWallpaperResult> {
+    private suspend fun searchAnimeProviders(query: String, page: Int): List<OnlineWallpaperResult> {
         val characters = searchAniListCharacters(query)
         val explicitCosplaySearch = query.contains("cosplay", ignoreCase = true)
         val tagQueries = buildList {
@@ -73,8 +73,10 @@ class OnlineWallpaperSearch {
             }
         }.filter { it.isNotBlank() }.distinct().take(8)
 
-        val danbooru = tagQueries.flatMap { tags -> searchDanbooru(tags, page) }
-            .distinctBy { it.id }.take(32)
+        val danbooru = coroutineScope {
+            tagQueries.map { tags -> async { runCatching { searchDanbooru(tags, page) }.getOrDefault(emptyList()) } }
+                .awaitAll().flatten()
+        }.distinctBy { it.id }.take(32)
         val anilist = characters.mapNotNull { character ->
             if (!isSecureImageUrl(character.image)) return@mapNotNull null
             OnlineWallpaperResult(
