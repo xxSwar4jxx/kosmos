@@ -45,6 +45,13 @@ class WallpaperStorage(private val context: Context) {
         get() = File(context.filesDir, "thumbnails").apply { mkdirs() }
 
     suspend fun ensurePresets() = withContext(Dispatchers.IO) {
+        // Remove the old generic generated set while preserving the new retro collection.
+        listOf("preset_aurora", "preset_cosmos", "preset_dusk", "preset_mono", "preset_solar",
+            "preset_violet", "preset_ocean", "preset_ember", "preset_mist", "preset_nebula",
+            "preset_citrus", "preset_midnight").forEach { legacy ->
+            File(wallpaperDirectory, "$legacy.jpg").delete()
+            File(thumbnailDirectory, "$legacy.jpg").delete()
+        }
         // Locally generated retro-inspired collection; no Samsung artwork is copied.
         val retroPresets = listOf(
             Preset("preset_retro_prism", "Prism", intArrayOf(Color.rgb(8, 24, 66), Color.rgb(38, 112, 174), Color.rgb(244, 117, 115)), 0),
