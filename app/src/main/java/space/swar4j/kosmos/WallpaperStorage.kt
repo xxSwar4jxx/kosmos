@@ -124,7 +124,7 @@ class WallpaperStorage(private val context: Context) {
     }
 
     suspend fun downloadSearchResult(result: OnlineWallpaperResult): StoredWallpaper = withContext(Dispatchers.IO) {
-        val extension = extensionFromUrl(result.downloadUrl).let { if (it == "jpeg") "jpg" else it }
+        val extension = result.fileExtension.lowercase().let { if (it == "jpeg") "jpg" else it }
         if (extension !in setOf("jpg", "png", "webp", "gif")) throw IOException("Unsupported image format")
         val title = sanitizeTitle(result.title)
         val destination = uniqueDestination(title, extension)
@@ -224,7 +224,7 @@ class WallpaperStorage(private val context: Context) {
                     return@repeat
                 }
                 if (status == 429) {
-                    throw IOException("Wikimedia is temporarily rate-limiting downloads. Wait a little and try again.")
+                    throw IOException("The image provider is temporarily rate-limiting downloads. Wait a little and try again.")
                 }
                 if (status != HttpURLConnection.HTTP_OK) throw IOException("Download failed (HTTP $status)")
                 if (current.host.lowercase() !in DOWNLOAD_HOSTS) throw IOException("Untrusted download host")
@@ -549,7 +549,7 @@ class WallpaperStorage(private val context: Context) {
         private const val READ_TIMEOUT_MS = 25_000
         private const val MAX_REDIRECTS = 4
         private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
-        private val DOWNLOAD_HOSTS = setOf("commons.wikimedia.org", "upload.wikimedia.org")
+        private val DOWNLOAD_HOSTS = setOf("commons.wikimedia.org", "upload.wikimedia.org", "api.openverse.org")
         private val SUPPORTED_EXTENSIONS = setOf("jpg", "png", "webp", "gif", "mp4")
     }
 }
