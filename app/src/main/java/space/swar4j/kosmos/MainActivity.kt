@@ -1007,14 +1007,11 @@ private fun KosmosScreen(
             text = { Text("Where would you like to use this wallpaper?") },
             confirmButton = {
                 Column(horizontalAlignment = Alignment.End) {
-                    val destinations = if (tab == "Presets" && applyPresetTo != "ask") {
-                        emptyList()
-                    } else listOf(
+                    listOf(
                         "Home screen" to WallpaperDestination.HOME,
                         "Lock screen" to WallpaperDestination.LOCK,
                         "Both" to WallpaperDestination.BOTH
-                    )
-                    destinations.forEach { (label, destination) ->
+                    ).forEach { (label, destination) ->
                         TextButton(onClick = {
                             val wallpaper = selectedWallpaper ?: return@TextButton
                             applyWallpaper(scope, applier, wallpaper, destination, snackbarHostState) {
