@@ -64,7 +64,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             // Start preparing MP4 media as soon as Android creates the wallpaper engine,
             // before the home-screen surface is ready. The first frame can then render
             // immediately when Android attaches the surface.
-            handler.post { prewarmSelectedVideo() }
+            handler.post { prewarmSelectedMedia() }
         }
 
         private val videoLoadTimeout = Runnable {
@@ -219,18 +219,18 @@ class KosmosLiveWallpaperService : WallpaperService() {
             }
         }
 
-        private fun prewarmSelectedVideo() {
-            if (player != null || !isVisible && videoTranscodeInProgress) return
+        private fun prewarmSelectedMedia() {
+            if (player != null || gifMovie != null || gifDrawable != null || gifDecodeTask != null) return
             val path = getSharedPreferences(
                 LiveWallpaperLauncher.PREFERENCES,
                 MODE_PRIVATE
             ).getString(LiveWallpaperLauncher.ACTIVE_WALLPAPER_PATH, null) ?: return
             val file = runCatching { File(path).canonicalFile }.getOrNull() ?: return
             val wallpaperDirectory = File(filesDir, "wallpapers").canonicalFile
-            if (file.parentFile == wallpaperDirectory && file.isFile && file.canRead() &&
-                file.extension.equals("mp4", ignoreCase = true)
-            ) {
-                startVideo(file)
+            if (file.parentFile != wallpaperDirectory || !file.isFile || !file.canRead()) return
+            when (file.extension.lowercase()) {
+                "mp4" -> startVideo(file)
+                "gif" -> startGif(file)
             }
         }
 
@@ -408,7 +408,6 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 handler.post {
                     if (generation != playbackGeneration) return@post
                     gifDecodeTask = null
-                    if (!isVisible || !surfaceWidthPositive()) return@post
                     if (decoded == null) {
                         reportPlaybackFailure((decodeResult.exceptionOrNull() as? PlaybackFailureException)?.failure ?: PlaybackError.GIF_DECODE_FAILED)
                         return@post
@@ -417,16 +416,20 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     when (decoded) {
                         is Movie -> {
                             gifMovie = decoded
-                            gifStartedAt = SystemClock.uptimeMillis()
+                            gifStartedAt = 0L
                             fallbackVisible = false
-                            handler.removeCallbacks(gifFrame)
-                            handler.post(gifFrame)
+                            if (isVisible && surfaceWidthPositive()) {
+                                gifStartedAt = SystemClock.uptimeMillis()
+                                handler.removeCallbacks(gifFrame)
+                                handler.post(gifFrame)
+                            }
                         }
                         is Drawable -> {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                                 attachAnimatedGif(decoded)
+                                if (!isVisible || !surfaceWidthPositive()) stopAnimatedGif(decoded)
                                 fallbackVisible = false
-                                drawGifFrame()
+                                if (isVisible && surfaceWidthPositive()) drawGifFrame()
                             } else {
                                 reportPlaybackFailure(PlaybackError.GIF_UNSUPPORTED)
                             }
@@ -462,7 +465,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             gifDrawable = animated
             animated.setBounds(0, 0, animated.intrinsicWidth, animated.intrinsicHeight)
             animated.callback = gifDrawableCallback
-            animated.start()
+            if (isVisible && surfaceWidthPositive()) animated.start() else animated.stop()
         }
 
         @RequiresApi(Build.VERSION_CODES.P)
@@ -565,6 +568,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                             drawable.draw(this)
                         }
                     } else if (movie != null) {
+                        if (gifStartedAt == 0L) gifStartedAt = SystemClock.uptimeMillis()
                         val duration = movie.duration().coerceAtLeast(1)
                         movie.setTime(((SystemClock.uptimeMillis() - gifStartedAt) % duration).toInt())
                         val scale = max(
