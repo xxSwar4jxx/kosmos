@@ -1,15 +1,19 @@
 package space.swar4j.kosmos
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.ImageDecoder
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.util.Base64
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -23,6 +27,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -39,6 +44,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
         }
 
         private var player: ExoPlayer? = null
+        private var zeroTechLogo: Bitmap? = null
         private var gifMovie: Movie? = null
         private var gifDrawable: Drawable? = null
         private var gifDecodeTask: Future<*>? = null
@@ -135,7 +141,9 @@ class KosmosLiveWallpaperService : WallpaperService() {
         @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
         private fun startVideo(file: File) {
             val exo = runCatching {
-                ExoPlayer.Builder(this@KosmosLiveWallpaperService).build()
+                val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
+                    .setEnableDecoderFallback(true)
+                ExoPlayer.Builder(this@KosmosLiveWallpaperService, renderersFactory).build()
             }.getOrElse {
                 reportPlaybackFailure(PlaybackError.VIDEO_PLAYER_INIT_FAILED)
                 return
@@ -148,7 +156,24 @@ class KosmosLiveWallpaperService : WallpaperService() {
             exo.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     if (player === exo) {
-                        reportPlaybackFailure(PlaybackError.VIDEO_PLAYBACK_FAILED)
+                        val failure = when (error.errorCode) {
+                            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+                            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ->
+                                PlaybackError.VIDEO_FORMAT_UNSUPPORTED
+                            else -> PlaybackError.VIDEO_PLAYBACK_FAILED
+                        }
+                        val diagnostic = buildString {
+                            append(error.errorCodeName)
+                            append(" (")
+                            append(error.errorCode)
+                            append(")")
+                            error.cause?.let { cause ->
+                                append(" • ")
+                                append(cause.javaClass.simpleName)
+                                cause.message?.take(120)?.let { append(": "); append(it) }
+                            }
+                        }
+                        reportPlaybackFailure(failure, diagnostic)
                         stopVideoPlayer(exo)
                     }
                 }
@@ -162,7 +187,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             })
 
             runCatching {
-                exo.setVideoSurface(surfaceHolder.surface)
+                exo.setVideoSurfaceHolder(surfaceHolder)
                 exo.setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(file)))
                 exo.prepare()
                 exo.playWhenReady = true
@@ -269,14 +294,15 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private fun surfaceWidthPositive(): Boolean =
             surfaceWidth > 0 && surfaceHeight > 0 && surfaceHolder.surface.isValid
 
-        private fun reportPlaybackFailure(failure: PlaybackError) {
+        private fun reportPlaybackFailure(failure: PlaybackError, detail: String? = null) {
             getSharedPreferences(LiveWallpaperLauncher.PREFERENCES, MODE_PRIVATE)
                 .edit()
                 .putString(LiveWallpaperLauncher.PLAYBACK_ERROR, failure.message)
                 .putString(LiveWallpaperLauncher.PLAYBACK_ERROR_CODE, failure.code)
                 .putString(LiveWallpaperLauncher.PLAYBACK_ERROR_CATEGORY, failure.category)
+                .putString(LiveWallpaperLauncher.PLAYBACK_ERROR_DETAIL, detail.orEmpty())
                 .apply()
-            PlaybackFailureNotifier.show(this@KosmosLiveWallpaperService, failure)
+            PlaybackFailureNotifier.show(this@KosmosLiveWallpaperService, failure, detail)
             fallbackVisible = true
             drawFallback()
         }
@@ -291,31 +317,23 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     val centerX = surfaceWidth / 2f
                     val centerY = surfaceHeight / 2f
                     val unit = minOf(surfaceWidth, surfaceHeight).toFloat()
-                    val logoRadius = unit * 0.105f
-                    val stroke = (unit * 0.009f).coerceAtLeast(3f)
-                    val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = Color.WHITE
-                        style = Paint.Style.STROKE
-                        strokeWidth = stroke
-                        strokeCap = Paint.Cap.ROUND
-                        strokeJoin = Paint.Join.ROUND
-                    }
-                    canvas.drawCircle(centerX, centerY - unit * 0.12f, logoRadius, logoPaint)
-                    val mark = Path().apply {
-                        moveTo(centerX - logoRadius * 0.48f, centerY - unit * 0.12f - logoRadius * 0.43f)
-                        lineTo(centerX + logoRadius * 0.48f, centerY - unit * 0.12f - logoRadius * 0.43f)
-                        lineTo(centerX - logoRadius * 0.48f, centerY - unit * 0.12f + logoRadius * 0.43f)
-                        lineTo(centerX + logoRadius * 0.48f, centerY - unit * 0.12f + logoRadius * 0.43f)
-                    }
-                    canvas.drawPath(mark, logoPaint)
+                    val logo = zeroTechLogo ?: runCatching {
+                        val encoded = assets.open("zerotech_logo.base64").bufferedReader().use { it.readText() }
+                        BitmapFactory.decodeByteArray(Base64.decode(encoded, Base64.DEFAULT), 0,
+                            Base64.decode(encoded, Base64.DEFAULT).size)
+                    }.getOrNull()?.also { zeroTechLogo = it }
 
-                    val brandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = Color.WHITE
-                        textAlign = Paint.Align.CENTER
-                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                        textSize = unit * 0.052f
+                    if (logo != null && !logo.isRecycled) {
+                        val targetWidth = unit * 0.43f
+                        val targetHeight = targetWidth * logo.height / logo.width.toFloat()
+                        val destination = RectF(
+                            centerX - targetWidth / 2f,
+                            centerY - unit * 0.19f,
+                            centerX + targetWidth / 2f,
+                            centerY - unit * 0.19f + targetHeight
+                        )
+                        canvas.drawBitmap(logo, null, destination, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
                     }
-                    canvas.drawText("ZeroTech", centerX, centerY + unit * 0.035f, brandPaint)
 
                     val messagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = Color.LTGRAY
@@ -325,11 +343,11 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     }
                     canvas.drawText(
                         "If you can see this then the wallpaper didn't load properly.",
-                        centerX, centerY + unit * 0.105f, messagePaint
+                        centerX, centerY + unit * 0.13f, messagePaint
                     )
                     canvas.drawText(
                         "Please Try Again.",
-                        centerX, centerY + unit * 0.15f, messagePaint
+                        centerX, centerY + unit * 0.175f, messagePaint
                     )
                 }
             } catch (_: RuntimeException) {
@@ -381,7 +399,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
 
         private fun stopVideoPlayer(exo: ExoPlayer) {
             handler.removeCallbacks(videoLoadTimeout)
-            runCatching { exo.clearVideoSurface() }
+            runCatching { exo.clearVideoSurfaceHolder(surfaceHolder) }
             runCatching { exo.stop() }
             runCatching { exo.release() }
             if (player === exo) player = null
