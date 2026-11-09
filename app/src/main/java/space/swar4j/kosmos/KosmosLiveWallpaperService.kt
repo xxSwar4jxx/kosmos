@@ -27,7 +27,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -144,9 +143,8 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private fun startVideo(file: File) {
             val exo = runCatching {
                 val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
-                    // Some Qualcomm AVC decoders fail during initialization on certain devices.
-                    // Prefer Android's software decoder first, then retain hardware fallback.
-                    .setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE)
+                    // Keep Android's device-specific codec priority. Forcing software first selected
+                    // c2.android.avc.decoder on affected devices and failed for High Profile AVC.
                     .setEnableDecoderFallback(true)
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService, renderersFactory).build()
             }.getOrElse {
@@ -163,7 +161,8 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     if (player === exo) {
                         val failure = when (error.errorCode) {
                             PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-                            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ->
+                            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+                            PlaybackException.ERROR_CODE_DECODING_FAILED ->
                                 PlaybackError.VIDEO_FORMAT_UNSUPPORTED
                             else -> PlaybackError.VIDEO_PLAYBACK_FAILED
                         }
@@ -333,7 +332,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                         val targetHeight = targetWidth * logo.height / logo.width.toFloat()
                         val destination = RectF(
                             centerX - targetWidth / 2f,
-                            centerY - unit * 0.19f,
+                            centerY - unit * 0.30f,
                             centerX + targetWidth / 2f,
                             centerY - unit * 0.19f + targetHeight
                         )
@@ -348,11 +347,11 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     }
                     canvas.drawText(
                         "If you can see this then the wallpaper didn't load properly.",
-                        centerX, centerY + unit * 0.13f, messagePaint
+                        centerX, centerY + unit * 0.10f, messagePaint
                     )
                     canvas.drawText(
                         "Please Try Again.",
-                        centerX, centerY + unit * 0.175f, messagePaint
+                        centerX, centerY + unit * 0.145f, messagePaint
                     )
                 }
             } catch (_: RuntimeException) {
