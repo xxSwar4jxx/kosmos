@@ -1019,8 +1019,8 @@ private fun WallpaperTile(
                 )
                 TextButton(onClick = onFavorite, modifier = Modifier.align(Alignment.TopEnd).padding(2.dp)) {
                     Text(
-                        "★",
-                        color = if (favorite) Color(0xFFFFC928) else Color(0xFFB8B8B8),
+                        if (favorite) "★" else "☆",
+                        color = if (favorite) Color(0xFFFFC928) else Color(0xFF30251A),
                         style = MaterialTheme.typography.titleLarge
                     )
                 }
