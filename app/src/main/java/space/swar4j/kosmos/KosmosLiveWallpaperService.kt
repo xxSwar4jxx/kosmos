@@ -26,6 +26,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.ReturnCode
@@ -56,6 +57,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private var surfaceWidth = 0
         private var surfaceHeight = 0
         private var playbackGeneration = 0
+        private var playbackPaused = false
         private var fallbackVisible = true
         private val videoLoadTimeout = Runnable {
             if (player != null && fallbackVisible) {
@@ -93,14 +95,22 @@ class KosmosLiveWallpaperService : WallpaperService() {
 
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
-            if (visible) startPlayback() else stopPlayback()
+            if (visible) resumePlayback() else pausePlayback()
         }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
             surfaceWidth = width
             surfaceHeight = height
-            stopPlayback()
+            if (player != null) {
+                runCatching { player?.setVideoSurfaceHolder(holder) }
+                return
+            }
+            if (gifDrawable != null || gifMovie != null) {
+                drawGifFrame()
+                if (isVisible && gifMovie != null) handler.removeCallbacks(gifFrame).also { handler.post(gifFrame) }
+                return
+            }
             if (isVisible) startPlayback()
         }
 
@@ -119,8 +129,50 @@ class KosmosLiveWallpaperService : WallpaperService() {
             super.onDestroy()
         }
 
+        private fun pausePlayback() {
+            playbackPaused = true
+            handler.removeCallbacks(gifFrame)
+            player?.let { exo ->
+                runCatching { exo.playWhenReady = false; exo.pause() }
+            }
+            gifDrawable?.let { drawable ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    runCatching { stopAnimatedGif(drawable) }
+                }
+            }
+        }
+
+        private fun resumePlayback() {
+            playbackPaused = false
+            if (!isVisible || !surfaceHolder.surface.isValid) return
+            player?.let { exo ->
+                runCatching { exo.playWhenReady = true; exo.play() }
+                return
+            }
+            gifDrawable?.let { drawable ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    runCatching { (drawable as? android.graphics.drawable.AnimatedImageDrawable)?.start() }
+                }
+                drawGifFrame()
+                return
+            }
+            gifMovie?.let {
+                drawGifFrame()
+                handler.removeCallbacks(gifFrame)
+                handler.post(gifFrame)
+                return
+            }
+            if (videoTranscodeInProgress || gifDecodeTask != null) return
+            val converted = transcodedGif?.takeIf { it.isFile && it.length() > 0L }
+            if (converted != null) {
+                startGif(converted)
+            } else {
+                startPlayback()
+            }
+        }
+
         private fun startPlayback() {
-            if (!isVisible || !surfaceHolder.surface.isValid ||
+            if (!isVisible || playbackPaused || !surfaceHolder.surface.isValid ||
                 surfaceWidth <= 0 || surfaceHeight <= 0 ||
                 player != null || gifMovie != null || gifDrawable != null ||
                 gifDecodeTask != null || videoTranscodeInProgress
@@ -155,7 +207,12 @@ class KosmosLiveWallpaperService : WallpaperService() {
             val exo = runCatching {
                 val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
                     .setEnableDecoderFallback(true)
-                ExoPlayer.Builder(this@KosmosLiveWallpaperService, renderersFactory).build()
+                val loadControl = DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(250, 1_500, 0, 0)
+                    .build()
+                ExoPlayer.Builder(this@KosmosLiveWallpaperService, renderersFactory)
+                    .setLoadControl(loadControl)
+                    .build()
             }.getOrElse {
                 startFfmpegFallback(file, "Media3 player initialization failed: ${it.javaClass.simpleName}")
                 return
@@ -240,13 +297,14 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 FFmpegKit.executeAsync(command) { session ->
                     handler.post {
                         videoTranscodeInProgress = false
-                        if (generation != playbackGeneration || !isVisible) {
+                        if (generation != playbackGeneration) {
                             output.delete()
                             return@post
                         }
 
                         if (ReturnCode.isSuccess(session.returnCode) && output.isFile && output.length() > 0L) {
-                            startGif(output)
+                            transcodedGif = output
+                            if (isVisible && !playbackPaused) startGif(output)
                         } else {
                             val code = session.returnCode?.value?.toString() ?: "unknown"
                             reportPlaybackFailure(
@@ -472,6 +530,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
         }
 
         private fun stopPlayback() {
+            playbackPaused = false
             playbackGeneration++
             if (videoTranscodeInProgress) {
                 runCatching { FFmpegKit.cancel() }
