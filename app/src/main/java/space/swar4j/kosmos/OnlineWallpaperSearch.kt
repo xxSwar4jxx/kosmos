@@ -73,20 +73,20 @@ class OnlineWallpaperSearch {
                 val title = item.optString("title").ifBlank { query }
                     .replace(Regex("\\s+"), " ").trim()
                 val tags = item.optJSONArray("tags")
-                val searchable = buildString {
-                    append(title.lowercase())
-                    if (tags != null) {
-                        for (tagIndex in 0 until tags.length()) {
-                            val tag = tags.optJSONObject(tagIndex)
-                            append(' ')
-                            append(tag?.optString("name").orEmpty().lowercase())
-                        }
-                    }
-                }
                 if (id.isBlank()) continue
 
-                val fileType = item.optString("filetype").lowercase()
-                    .let { if (it == "jpeg") "jpg" else it }
+                val mimeType = item.optString("mimetype").ifBlank { item.optString("filetype") }
+                val fileType = mimeType.substringAfterLast('/').substringBefore(';').lowercase()
+                    .let { raw ->
+                        when (raw) {
+                            "jpeg", "pjpeg" -> "jpg"
+                            "x-png" -> "png"
+                            else -> raw
+                        }
+                    }.ifBlank {
+                        item.optString("url").substringBefore('?').substringAfterLast('.').lowercase()
+                            .let { if (it == "jpeg") "jpg" else it }
+                    }
                 if (fileType !in SUPPORTED_IMAGE_TYPES) continue
 
                 val thumbnail = item.optString("thumbnail")
@@ -149,7 +149,6 @@ class OnlineWallpaperSearch {
                     ?.optString("value").orEmpty()
                     .replace(Regex("<[^>]*>"), " ")
                     .replace(Regex("\\s+"), " ").trim()
-                val searchable = "$title $description".lowercase()
                 // Keep provider-ranked matches; strict client-side filtering discarded useful results.
                 if (!isSecureImageUrl(preview) ||
                     !isSecureImageUrl(download)
@@ -158,6 +157,11 @@ class OnlineWallpaperSearch {
                 val extension = download.substringBefore('?')
                     .substringAfterLast('.', "").lowercase()
                     .let { if (it == "jpeg") "jpg" else it }
+                    .ifBlank {
+                        metadata?.optJSONObject("MimeType")?.optString("value").orEmpty()
+                            .substringAfterLast('/').lowercase()
+                            .let { if (it == "jpeg") "jpg" else it }
+                    }
                 if (extension !in SUPPORTED_IMAGE_TYPES) continue
 
                 val creator = metadata?.optJSONObject("Artist")?.optString("value")
