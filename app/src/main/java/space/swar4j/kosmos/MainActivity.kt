@@ -283,7 +283,9 @@ private fun KosmosScreen(
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(20)
     ) { uris ->
-        if (uris.isNotEmpty()) scope.launch {
+        if (uris.isEmpty()) {
+            importingForPresets = false
+        } else scope.launch {
             isImporting = true
             var imported = 0
             uris.forEach { uri ->
