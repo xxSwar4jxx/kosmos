@@ -18,9 +18,19 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,18 +73,29 @@ fun MiniWallpaperTile(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     Card(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier,
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column {
-            AsyncImage(
-                model = wallpaper.thumbnail,
-                contentDescription = wallpaper.title,
-                modifier = Modifier.fillMaxWidth().aspectRatio(1.05f).clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)),
-                contentScale = ContentScale.Crop
-            )
+            Box {
+                AsyncImage(
+                    model = wallpaper.thumbnail,
+                    contentDescription = wallpaper.title,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1.05f).clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)).clickable(onClick = onClick),
+                    contentScale = ContentScale.Crop
+                )
+                Box(Modifier.align(Alignment.TopEnd)) {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = "Wallpaper options")
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Open") }, onClick = { menuExpanded = false; onClick() })
+                    }
+                }
+            }
             Text(wallpaper.title, modifier = Modifier.padding(10.dp),
                 style = MaterialTheme.typography.titleSmall, maxLines = 1)
         }
@@ -87,17 +108,31 @@ fun PresetTile(
     onApply: () -> Unit,
     onRemove: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column {
-            AsyncImage(
-                model = wallpaper.thumbnail,
-                contentDescription = wallpaper.title,
-                modifier = Modifier.fillMaxWidth().aspectRatio(0.78f).clickable(onClick = onApply),
-                contentScale = ContentScale.Crop
-            )
+            Box {
+                AsyncImage(
+                    model = wallpaper.thumbnail,
+                    contentDescription = wallpaper.title,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(0.78f).clickable(onClick = onApply),
+                    contentScale = ContentScale.Crop
+                )
+                Box(Modifier.align(Alignment.TopEnd)) {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = "Preset options")
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Apply") }, onClick = { menuExpanded = false; onApply() })
+                        if (!wallpaper.isPreset) {
+                            DropdownMenuItem(text = { Text("Remove from Presets") }, onClick = { menuExpanded = false; onRemove() })
+                        }
+                    }
+                }
+            }
             Text(wallpaper.title, modifier = Modifier.padding(start = 12.dp, top = 10.dp),
                 style = MaterialTheme.typography.titleSmall, maxLines = 1)
             androidx.compose.foundation.layout.Row(
