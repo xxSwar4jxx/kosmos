@@ -189,6 +189,7 @@ private fun KosmosScreen(
     var wallpapers by remember { mutableStateOf<List<StoredWallpaper>>(emptyList()) }
     var catalogItems by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
     var onlineResults by remember { mutableStateOf<List<OnlineWallpaperResult>>(emptyList()) }
+    var onlinePage by rememberSaveable { mutableIntStateOf(1) }
     var onlineQuery by rememberSaveable { mutableStateOf("") }
     var isSearchingOnline by remember { mutableStateOf(false) }
     var isDiscoverLoading by remember { mutableStateOf(false) }
@@ -213,6 +214,7 @@ private fun KosmosScreen(
             tab = "Search"
             scope.launch {
                 isSearchingOnline = true
+                onlinePage = 1
                 onlineResults = emptyList()
                 runCatching { OnlineWallpaperSearch().search(onlineQuery, page = 1) }
                     .onSuccess { onlineResults = it }
@@ -546,10 +548,18 @@ private fun KosmosScreen(
                                 discoverIndex = nextIndex
                                 scope.launch {
                                     isDiscoverLoading = true
-                                    discoverResults = emptyList()
-                                    runCatching { OnlineWallpaperSearch().search(discoverQueries[nextIndex], page = 1) }
-                                        .onSuccess { discoverResults = it }
-                                        .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't refresh Discover") }
+                                    val refreshed = mutableListOf<OnlineWallpaperResult>()
+                                    for (offset in 0 until 3) {
+                                        val query = discoverQueries[(nextIndex + offset) % discoverQueries.size]
+                                        val batch = runCatching { OnlineWallpaperSearch().search(query, page = 1) }.getOrDefault(emptyList())
+                                        refreshed += batch
+                                        if (refreshed.size >= 24) break
+                                    }
+                                    if (refreshed.isNotEmpty()) {
+                                        discoverResults = refreshed.distinctBy { it.id }.take(24)
+                                    } else {
+                                        snackbarHostState.showSnackbar("No fresh wallpapers were found. Your current results are still here.")
+                                    }
                                     isDiscoverLoading = false
                                 }
                             }
@@ -701,6 +711,24 @@ private fun KosmosScreen(
                                 )
                             }
                         }
+                        TextButton(
+                            onClick = {
+                                if (!isSearchingOnline) scope.launch {
+                                    isSearchingOnline = true
+                                    val nextPage = onlinePage + 1
+                                    runCatching { OnlineWallpaperSearch().search(onlineQuery, page = nextPage) }
+                                        .onSuccess { more ->
+                                            if (more.isNotEmpty()) {
+                                                onlineResults = (onlineResults + more).distinctBy { it.id }
+                                                onlinePage = nextPage
+                                            } else snackbarHostState.showSnackbar("No more results for this search")
+                                        }
+                                        .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't load more results") }
+                                    isSearchingOnline = false
+                                }
+                            },
+                            enabled = hasInternet && !isSearchingOnline
+                        ) { Text(if (isSearchingOnline) "Loading…" else "Load more") }
                     }
                 }
             }
