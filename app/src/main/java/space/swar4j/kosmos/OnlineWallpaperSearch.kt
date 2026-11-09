@@ -53,6 +53,12 @@ class OnlineWallpaperSearch {
             val (openverse, commons) = fetchFor(clean)
             var combined = openverse.getOrDefault(emptyList()) + commons.getOrDefault(emptyList())
 
+            // Anime illustrations come from a separate SFW-only image source;
+            // Openverse and Wikimedia remain the general-purpose providers.
+            if (terms.any { it in setOf("anime", "waifu", "manga") }) {
+                combined += runCatching { searchAnimeImages(safePage) }.getOrDefault(emptyList())
+            }
+
             // Retry low-yield searches with two broader phrases. Keep provider calls
             // concurrent, and only pay this cost when the original query is sparse.
             if (combined.size < 8 && safePage == 1) {
@@ -81,6 +87,37 @@ class OnlineWallpaperSearch {
                 }
                 .take(40)
         }
+
+    private fun searchAnimeImages(page: Int): List<OnlineWallpaperResult> {
+        val endpoint = URL(
+            "https://api.waifu.im/search/?included_tags=waifu&is_nsfw=false&many=true"
+        )
+        val root = requestJson(endpoint, "https://www.waifu.im/")
+        val images = root.optJSONArray("images") ?: return emptyList()
+        val start = ((page - 1) * 20).coerceAtMost(images.length())
+        return buildList {
+            for (index in start until minOf(start + 20, images.length())) {
+                val item = images.optJSONObject(index) ?: continue
+                val imageUrl = item.optString("url")
+                if (!isSecureImageUrl(imageUrl)) continue
+                val extension = imageUrl.substringBefore('?').substringAfterLast('.', "").lowercase()
+                    .let { if (it == "jpeg") "jpg" else it }
+                if (extension !in SUPPORTED_IMAGE_TYPES) continue
+                val id = item.optString("image_id").ifBlank { "anime-$index" }
+                add(
+                    OnlineWallpaperResult(
+                        id = "waifu-im-$id",
+                        title = "Anime illustration $id",
+                        previewUrl = imageUrl,
+                        downloadUrl = imageUrl,
+                        fileExtension = extension,
+                        creator = "Waifu.im community",
+                        license = "See original source"
+                    )
+                )
+            }
+        }
+    }
 
     private fun searchOpenverse(
         query: String,
