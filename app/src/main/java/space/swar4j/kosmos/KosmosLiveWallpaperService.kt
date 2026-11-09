@@ -27,7 +27,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
-import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -143,9 +142,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
         @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
         private fun startVideo(file: File) {
             val exo = runCatching {
-                val renderersFactory = NextRenderersFactory(this@KosmosLiveWallpaperService)
-                    // Prefer bundled FFmpeg AVC decoding when the device's vendor decoder cannot initialize.
-                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+                val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
                     .setEnableDecoderFallback(true)
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService, renderersFactory).build()
             }.getOrElse {
