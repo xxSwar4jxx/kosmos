@@ -338,7 +338,7 @@ private fun KosmosScreen(
                 OutlinedTextField(
                     value = onlineQuery,
                     onValueChange = { onlineQuery = it },
-                    modifier = Modifier.width(148.dp).height(48.dp),
+                    modifier = Modifier.width(148.dp).height(44.dp),
                     singleLine = true,
                     enabled = hasInternet && !isSearchingOnline,
                     placeholder = { Text("SEARCH") },
@@ -560,20 +560,26 @@ private fun KosmosScreen(
                                 discoverIndex = nextIndex
                                 scope.launch {
                                     isDiscoverLoading = true
-                                    val refreshed = coroutineScope {
-                                        (0 until 3).map { offset ->
-                                            async {
-                                                val query = discoverQueries[(nextIndex + offset) % discoverQueries.size]
-                                                runCatching { OnlineWallpaperSearch().search(query, page = 1) }.getOrDefault(emptyList())
-                                            }
-                                        }.awaitAll().flatten()
+                                    try {
+                                        val refreshed = coroutineScope {
+                                            (0 until 3).map { offset ->
+                                                async {
+                                                    val query = discoverQueries[(nextIndex + offset) % discoverQueries.size]
+                                                    runCatching { OnlineWallpaperSearch().search(query, page = 1) }.getOrDefault(emptyList())
+                                                }
+                                            }.awaitAll().flatten()
+                                        }
+                                        val unique = refreshed.distinctBy { it.downloadUrl.substringBefore('?') }
+                                        if (unique.isNotEmpty()) {
+                                            discoverResults = unique.take(30)
+                                        } else {
+                                            snackbarHostState.showSnackbar("No fresh wallpapers were found. Your current results are still here.")
+                                        }
+                                    } catch (error: Exception) {
+                                        snackbarHostState.showSnackbar(error.message ?: "Discover refresh failed. Your current results are still here.")
+                                    } finally {
+                                        isDiscoverLoading = false
                                     }
-                                    if (refreshed.isNotEmpty()) {
-                                        discoverResults = refreshed.distinctBy { it.id }.take(24)
-                                    } else {
-                                        snackbarHostState.showSnackbar("No fresh wallpapers were found. Your current results are still here.")
-                                    }
-                                    isDiscoverLoading = false
                                 }
                             }
                         },
