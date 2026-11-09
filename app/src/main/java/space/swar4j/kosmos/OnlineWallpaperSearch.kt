@@ -58,10 +58,14 @@ class OnlineWallpaperSearch {
     private data class AnimeCharacter(val name: String, val series: String, val image: String)
 
     private suspend fun searchAnimeProviders(query: String, page: Int): List<OnlineWallpaperResult> {
-        val characters = searchAniListCharacters(query)
         val allowCosplay = query.contains("cosplay", ignoreCase = true)
+        val animeSearch = query.replace(
+            Regex("\\b(wallpaper|wallpapers|background|image|images|picture|pictures|4k|uhd|hd|anime|illustration|art)\\b", RegexOption.IGNORE_CASE),
+            " "
+        ).replace(Regex("\\s+"), " ").trim().ifBlank { query }
+        val characters = searchAniListCharacters(animeSearch)
         val tagQueries = buildList {
-            add(query.toDanbooruTagQuery(allowCosplay))
+            add(animeSearch.toDanbooruTagQuery(allowCosplay))
             characters.forEach { character ->
                 add(character.name.toDanbooruTagQuery(allowCosplay))
                 if (character.series.isNotBlank()) add((character.name + " " + character.series).toDanbooruTagQuery(allowCosplay))
