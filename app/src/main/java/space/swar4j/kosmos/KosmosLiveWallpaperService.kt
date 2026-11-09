@@ -103,19 +103,51 @@ class KosmosLiveWallpaperService : WallpaperService() {
             surfaceWidth = width
             surfaceHeight = height
             if (player != null) {
-                runCatching { player?.setVideoSurfaceHolder(holder) }
+                runCatching {
+                    player?.setVideoSurfaceHolder(holder)
+                    if (isVisible) {
+                        playbackPaused = false
+                        player?.playWhenReady = true
+                        player?.play()
+                    }
+                }
                 return
             }
             if (gifDrawable != null || gifMovie != null) {
-                drawGifFrame()
-                if (isVisible && gifMovie != null) handler.removeCallbacks(gifFrame).also { handler.post(gifFrame) }
+                if (isVisible) {
+                    playbackPaused = false
+                    gifDrawable?.let { drawable ->
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            runCatching { (drawable as? android.graphics.drawable.AnimatedImageDrawable)?.start() }
+                        }
+                    }
+                    drawGifFrame()
+                    if (gifMovie != null) handler.removeCallbacks(gifFrame).also { handler.post(gifFrame) }
+                }
                 return
             }
             if (isVisible) startPlayback()
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
-            stopPlayback()
+            // Keep the decoder and its current position alive while Android replaces the
+            // wallpaper surface (for example, during an app transition). Releasing ExoPlayer
+            // here forces a full codec startup and causes the visible black gap on return.
+            playbackPaused = true
+            handler.removeCallbacks(gifFrame)
+            handler.removeCallbacks(videoLoadTimeout)
+            player?.let { exo ->
+                runCatching {
+                    exo.playWhenReady = false
+                    exo.pause()
+                    exo.clearVideoSurfaceHolder(holder)
+                }
+            }
+            gifDrawable?.let { drawable ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    runCatching { stopAnimatedGif(drawable) }
+                }
+            }
             surfaceWidth = 0
             surfaceHeight = 0
             super.onSurfaceDestroyed(holder)
