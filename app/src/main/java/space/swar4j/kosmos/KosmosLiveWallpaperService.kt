@@ -27,6 +27,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -143,6 +144,9 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private fun startVideo(file: File) {
             val exo = runCatching {
                 val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
+                    // Some Qualcomm AVC decoders fail during initialization on certain devices.
+                    // Prefer Android's software decoder first, then retain hardware fallback.
+                    .setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE)
                     .setEnableDecoderFallback(true)
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService, renderersFactory).build()
             }.getOrElse {
