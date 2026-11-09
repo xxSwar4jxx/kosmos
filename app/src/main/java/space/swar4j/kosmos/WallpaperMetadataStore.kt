@@ -60,6 +60,15 @@ class WallpaperMetadataStore(context: Context) {
         }
     }
 
+    fun setOnlineFavorite(id: String, favorite: Boolean) {
+        val favorites = preferences.getStringSet(KEY_ONLINE_FAVORITES, emptySet()).orEmpty().toMutableSet()
+        if (favorite) favorites.add(id) else favorites.remove(id)
+        preferences.edit { putStringSet(KEY_ONLINE_FAVORITES, favorites) }
+    }
+
+    fun isOnlineFavorite(id: String): Boolean =
+        preferences.getStringSet(KEY_ONLINE_FAVORITES, emptySet())?.contains(id) == true
+
     fun isPreset(fileName: String): Boolean =
         preferences.getStringSet(KEY_PRESETS, emptySet())?.contains(fileName) == true
 
@@ -80,6 +89,7 @@ class WallpaperMetadataStore(context: Context) {
         val CATEGORIES = listOf("Nature", "Space", "Abstract", "Minimal", "Anime", "Unsorted")
         private const val KEY_FAVORITES = "favorites"
         private const val KEY_PRESETS = "user_presets"
+        private const val KEY_ONLINE_FAVORITES = "online_favorites"
         private fun categoryKey(fileName: String) = "category:$fileName"
     }
 }
