@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -45,6 +46,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -65,6 +67,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -107,24 +114,13 @@ class MainActivity : ComponentActivity() {
         val catalogue = CatalogRepository(applicationContext)
 
         setContent {
-            val themePreferences = remember {
-                getSharedPreferences("kosmos_settings", MODE_PRIVATE)
-            }
-            var darkTheme by rememberSaveable {
-                mutableStateOf(themePreferences.getBoolean("dark_theme", true))
-            }
-            KosmosTheme(darkTheme = darkTheme) {
+            KosmosTheme {
                 KosmosScreen(
                     storage = storage,
                     applier = applier,
                     liveLauncher = liveLauncher,
                     metadata = metadata,
-                    catalogue = catalogue,
-                    darkTheme = darkTheme,
-                    onThemeChange = {
-                        darkTheme = it
-                        themePreferences.edit { putBoolean("dark_theme", it) }
-                    }
+                    catalogue = catalogue
                 )
             }
         }
@@ -137,9 +133,7 @@ private fun KosmosScreen(
     applier: StaticWallpaperApplier,
     liveLauncher: LiveWallpaperLauncher,
     metadata: WallpaperMetadataStore,
-    catalogue: CatalogRepository,
-    darkTheme: Boolean,
-    onThemeChange: (Boolean) -> Unit
+    catalogue: CatalogRepository
 ) {
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -199,7 +193,10 @@ private fun KosmosScreen(
     var isLoadingCatalogue by remember { mutableStateOf(false) }
     var downloadingId by remember { mutableStateOf<String?>(null) }
     var favoriteVersion by remember { mutableIntStateOf(0) }
-    var tab by rememberSaveable { mutableStateOf("Library") }
+    var tab by rememberSaveable { mutableStateOf("Home") }
+    var showAddPresetDialog by remember { mutableStateOf(false) }
+    var discoverResults by remember { mutableStateOf<List<OnlineWallpaperResult>>(emptyList()) }
+    var discoverIndex by rememberSaveable { mutableIntStateOf(0) }
     var filter by rememberSaveable { mutableStateOf("All") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showCategoryMenu by remember { mutableStateOf(false) }
@@ -244,7 +241,7 @@ private fun KosmosScreen(
             "Favorites" -> metadata.isFavorite(wallpaper.file.name)
             "Photos" -> !wallpaper.isAnimated
             "Animated" -> wallpaper.isAnimated
-            "Presets" -> wallpaper.isPreset
+            "Presets" -> metadata.isPreset(wallpaper.file.name)
             in WallpaperMetadataStore.CATEGORIES -> metadata.category(wallpaper.file.name) == filter
             else -> true
         }
