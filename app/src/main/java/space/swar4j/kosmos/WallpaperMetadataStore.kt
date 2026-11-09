@@ -38,6 +38,17 @@ class WallpaperMetadataStore(context: Context) {
         }
     }
 
+    fun isPreset(fileName: String): Boolean =
+        preferences.getStringSet(KEY_PRESETS, emptySet())?.contains(fileName) == true
+
+    fun setPreset(fileName: String, preset: Boolean) {
+        val presets = preferences.getStringSet(KEY_PRESETS, emptySet()).orEmpty().toMutableSet()
+        if (preset) presets.add(fileName) else presets.remove(fileName)
+        preferences.edit { putStringSet(KEY_PRESETS, presets) }
+    }
+
+    fun presetFileNames(): Set<String> = preferences.getStringSet(KEY_PRESETS, emptySet()).orEmpty().toSet()
+
     fun setCategory(fileName: String, category: String) {
         require(category in CATEGORIES)
         preferences.edit { putString(categoryKey(fileName), category) }
@@ -46,6 +57,7 @@ class WallpaperMetadataStore(context: Context) {
     companion object {
         val CATEGORIES = listOf("Nature", "Space", "Abstract", "Minimal", "Anime", "Unsorted")
         private const val KEY_FAVORITES = "favorites"
+        private const val KEY_PRESETS = "user_presets"
         private fun categoryKey(fileName: String) = "category:$fileName"
     }
 }
