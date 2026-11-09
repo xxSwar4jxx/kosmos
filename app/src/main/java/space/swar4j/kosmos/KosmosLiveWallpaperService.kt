@@ -16,6 +16,7 @@ import android.util.Base64
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.media.MediaMetadataRetriever
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import androidx.annotation.RequiresApi
@@ -50,6 +51,8 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private var videoTranscodeInProgress = false
         private var transcodedGif: File? = null
         private var zeroTechLogo: Bitmap? = null
+        private var videoPoster: Bitmap? = null
+        private var videoPosterDecodeStarted = false
         private var gifMovie: Movie? = null
         private var gifDrawable: Drawable? = null
         private var gifDecodeTask: Future<*>? = null
@@ -147,6 +150,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             // wallpaper surface (for example, during an app transition). Releasing ExoPlayer
             // here forces a full codec startup and causes the visible black gap on return.
             playbackPaused = true
+            if (player != null) fallbackVisible = true
             handler.removeCallbacks(gifFrame)
             player?.let { exo ->
                 runCatching {
@@ -170,6 +174,8 @@ class KosmosLiveWallpaperService : WallpaperService() {
             gifDecoder.shutdownNow()
             zeroTechLogo?.recycle()
             zeroTechLogo = null
+            videoPoster?.recycle()
+            videoPoster = null
             super.onDestroy()
         }
 
@@ -267,6 +273,38 @@ class KosmosLiveWallpaperService : WallpaperService() {
         @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
         private fun startVideo(file: File) {
             activeVideoFile = file
+            prewarmVideoPoster(file)
+        private fun prewarmVideoPoster(file: File) {
+            if (videoPoster != null || videoPosterDecodeStarted) return
+            videoPosterDecodeStarted = true
+            val generation = playbackGeneration
+            gifDecoder.submit {
+                val frame = runCatching {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(file.absolutePath)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        }
+                    } finally {
+                        runCatching { retriever.release() }
+                    }
+                }.getOrNull()
+                handler.post {
+                    if (generation != playbackGeneration) {
+                        frame?.recycle()
+                        return@post
+                    }
+                    videoPoster?.recycle()
+                    videoPoster = frame
+                    if (frame != null && fallbackVisible && isVisible && surfaceWidthPositive()) drawFallback()
+                }
+            }
+        }
+
             val exo = runCatching {
                 val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
                     .setEnableDecoderFallback(true)
@@ -343,7 +381,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
          * existing platform GIF renderer. The temporary file lives only in cache.
          */
         private fun startFfmpegFallback(file: File, media3Diagnostic: String) {
-            if (videoTranscodeInProgress || !isVisible) return
+            if (videoTranscodeInProgress) return
             handler.removeCallbacks(videoLoadTimeout)
             videoTranscodeInProgress = true
             val generation = playbackGeneration
@@ -369,7 +407,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
 
                         if (ReturnCode.isSuccess(session.returnCode) && output.isFile && output.length() > 0L) {
                             transcodedGif = output
-                            if (isVisible && !playbackPaused) startGif(output)
+                            startGif(output)
                         } else {
                             val code = session.returnCode?.value?.toString() ?: "unknown"
                             reportPlaybackFailure(
@@ -505,6 +543,17 @@ class KosmosLiveWallpaperService : WallpaperService() {
             try {
                 canvas = surfaceHolder.lockCanvas()
                 if (canvas != null) {
+                    val poster = videoPoster?.takeUnless { it.isRecycled }
+                    if (poster != null) {
+                        val scale = max(surfaceWidth.toFloat() / poster.width, surfaceHeight.toFloat() / poster.height)
+                        val width = poster.width * scale
+                        val height = poster.height * scale
+                        val destination = RectF(
+                            (surfaceWidth - width) / 2f, (surfaceHeight - height) / 2f,
+                            (surfaceWidth + width) / 2f, (surfaceHeight + height) / 2f
+                        )
+                        canvas.drawBitmap(poster, null, destination, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                    } else {
                     canvas.drawColor(Color.rgb(10, 12, 18))
                     val centerX = surfaceWidth / 2f
                     val centerY = surfaceHeight / 2f
@@ -541,6 +590,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
                         "Please Try Again.",
                         centerX, centerY + unit * 0.23f, messagePaint
                     )
+                    }
                 }
             } catch (_: RuntimeException) {
             } finally {
