@@ -43,7 +43,7 @@ object PlaybackFailureNotifier {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Wallpaper errors",
+                "Arka wallpaper errors",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Alerts when a live wallpaper fails to load or play"
@@ -62,7 +62,7 @@ object PlaybackFailureNotifier {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("Kosmos wallpaper failed")
+            .setContentTitle("Arka wallpaper failed")
             .setContentText(failure.message)
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
