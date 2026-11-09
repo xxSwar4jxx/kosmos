@@ -53,7 +53,11 @@ class WallpaperStorage(private val context: Context) {
             Preset("preset_solar.jpg", "Solar Flare", intArrayOf(0xFF24101B.toInt(), 0xFFFF7A18.toInt(), 0xFFFFD166.toInt()), 4),
             Preset("preset_violet.jpg", "Violet Horizon", intArrayOf(0xFF100D2B.toInt(), 0xFF713C91.toInt(), 0xFFE38BCB.toInt()), 5),
             Preset("preset_ocean.jpg", "Deep Current", intArrayOf(0xFF041D2A.toInt(), 0xFF087E8B.toInt(), 0xFF9AE6D7.toInt()), 6),
-            Preset("preset_ember.jpg", "Ember", intArrayOf(0xFF1A0C12.toInt(), 0xFF9E293F.toInt(), 0xFFFFA552.toInt()), 7)
+            Preset("preset_ember.jpg", "Ember", intArrayOf(0xFF1A0C12.toInt(), 0xFF9E293F.toInt(), 0xFFFFA552.toInt()), 7),
+            Preset("preset_mist.jpg", "Silver Mist", intArrayOf(0xFF101B2D.toInt(), 0xFF647C9B.toInt(), 0xFFD8E2F0.toInt()), 0),
+            Preset("preset_nebula.jpg", "Nebula Bloom", intArrayOf(0xFF170D35.toInt(), 0xFF6941A5.toInt(), 0xFFE77DB8.toInt()), 1),
+            Preset("preset_citrus.jpg", "Citrus Glow", intArrayOf(0xFF17352C.toInt(), 0xFFB8C84A.toInt(), 0xFFFFD47B.toInt()), 2),
+            Preset("preset_midnight.jpg", "Midnight Grid", intArrayOf(0xFF070B18.toInt(), 0xFF172844.toInt(), 0xFF496A8D.toInt()), 3)
         )
         presets.forEach { preset ->
             val file = File(wallpaperDirectory, preset.fileName)
@@ -219,6 +223,10 @@ class WallpaperStorage(private val context: Context) {
                         "preset_violet" -> "Violet Horizon"
                         "preset_ocean" -> "Deep Current"
                         "preset_ember" -> "Ember"
+                        "preset_mist" -> "Silver Mist"
+                        "preset_nebula" -> "Nebula Bloom"
+                        "preset_citrus" -> "Citrus Glow"
+                        "preset_midnight" -> "Midnight Grid"
                         else -> file.nameWithoutExtension
                     }
                 } else file.nameWithoutExtension.substringBefore("__").replace("-", " ").take(48),
