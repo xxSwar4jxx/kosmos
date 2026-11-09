@@ -65,7 +65,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -250,6 +249,16 @@ private fun KosmosScreen(
         catalogItems = catalogue.load()
         isLoadingCatalogue = false
     }
+    LaunchedEffect(tab, hasInternet) {
+        if (tab == "Discover" && hasInternet && discoverResults.isEmpty() && !isLoadingCatalogue) {
+            isLoadingCatalogue = true
+            runCatching { OnlineWallpaperSearch().search(discoverQueries[discoverIndex]) }
+                .onSuccess { discoverResults = it }
+                .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't load Discover") }
+            isLoadingCatalogue = false
+        }
+    }
+
 
     val filteredWallpapers = remember(wallpapers, filter, searchQuery, favoriteVersion) { wallpapers.filter { wallpaper ->
         val matchesSearch = searchQuery.isBlank() ||
@@ -941,7 +950,7 @@ private fun OnlineSearchTile(
                     enabled = !downloading,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Outlined.ContentCopy, contentDescription = "Use as wallpaper")
+                    Icon(Icons.Outlined.Wallpaper, contentDescription = "Use as wallpaper")
                 }
             }
         }
