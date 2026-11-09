@@ -274,37 +274,6 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private fun startVideo(file: File) {
             activeVideoFile = file
             prewarmVideoPoster(file)
-        private fun prewarmVideoPoster(file: File) {
-            if (videoPoster != null || videoPosterDecodeStarted) return
-            videoPosterDecodeStarted = true
-            val generation = playbackGeneration
-            gifDecoder.submit {
-                val frame = runCatching {
-                    val retriever = MediaMetadataRetriever()
-                    try {
-                        retriever.setDataSource(file.absolutePath)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                            retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        }
-                    } finally {
-                        runCatching { retriever.release() }
-                    }
-                }.getOrNull()
-                handler.post {
-                    if (generation != playbackGeneration) {
-                        frame?.recycle()
-                        return@post
-                    }
-                    videoPoster?.recycle()
-                    videoPoster = frame
-                    if (frame != null && fallbackVisible && isVisible && surfaceWidthPositive()) drawFallback()
-                }
-            }
-        }
-
             val exo = runCatching {
                 val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
                     .setEnableDecoderFallback(true)
@@ -374,6 +343,37 @@ class KosmosLiveWallpaperService : WallpaperService() {
             }
         }
 
+
+        private fun prewarmVideoPoster(file: File) {
+            if (videoPoster != null || videoPosterDecodeStarted) return
+            videoPosterDecodeStarted = true
+            val generation = playbackGeneration
+            gifDecoder.submit {
+                val frame = runCatching {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(file.absolutePath)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        }
+                    } finally {
+                        runCatching { retriever.release() }
+                    }
+                }.getOrNull()
+                handler.post {
+                    if (generation != playbackGeneration) {
+                        frame?.recycle()
+                        return@post
+                    }
+                    videoPoster?.recycle()
+                    videoPoster = frame
+                    if (frame != null && fallbackVisible && isVisible && surfaceWidthPositive()) drawFallback()
+                }
+            }
+        }
 
         /**
          * Device decoders can reject otherwise valid H.264 streams. In that case,
