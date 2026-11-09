@@ -135,7 +135,6 @@ class KosmosLiveWallpaperService : WallpaperService() {
             // here forces a full codec startup and causes the visible black gap on return.
             playbackPaused = true
             handler.removeCallbacks(gifFrame)
-            handler.removeCallbacks(videoLoadTimeout)
             player?.let { exo ->
                 runCatching {
                     exo.playWhenReady = false
