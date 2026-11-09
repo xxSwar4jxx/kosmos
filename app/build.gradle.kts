@@ -53,8 +53,8 @@ dependencies {
 
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.media3:media3-exoplayer:1.11.1")
-    // GPL-3.0 FFmpeg build supplies a software decode path when device MediaCodec fails.
-    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-full-gpl:8.1.9")
+    // FFmpeg build supplies a software decode path when device MediaCodec fails.
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.9")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
