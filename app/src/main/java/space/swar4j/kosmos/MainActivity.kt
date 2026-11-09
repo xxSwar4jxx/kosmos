@@ -361,21 +361,18 @@ private fun KosmosScreen(
         Column(
             modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF100B1B), Color(0xFF21101D), Color(0xFF39200F), Color(0xFF090A0D)))).padding(padding).padding(horizontal = 20.dp)
         ) {
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
                     painter = painterResource(R.drawable.arka_banner),
                     contentDescription = "Arka by ZeroTech",
-                    modifier = Modifier.weight(1f).height(72.dp),
+                    modifier = Modifier.weight(1f).height(100.dp),
                     contentScale = ContentScale.Fit
                 )
-                IconButton(onClick = { tab = "Settings"; settingsSection = "General" }) {
-                    Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurface)
-                }
                 OutlinedTextField(
                     value = onlineQuery,
                     onValueChange = { onlineQuery = it },
@@ -388,17 +385,26 @@ private fun KosmosScreen(
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                listOf("Home", "Library", "Discover", "Presets").forEach { destination ->
-                    FilterChip(
-                        selected = tab == destination,
-                        onClick = { tab = destination },
-                        label = { Text(destination) }
-                    )
+                Row(
+                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("Home", "Library", "Discover", "Presets").forEach { destination ->
+                        FilterChip(
+                            selected = tab == destination,
+                            onClick = { tab = destination },
+                            label = { Text(destination) }
+                        )
+                    }
+                }
+                IconButton(onClick = { tab = "Settings"; settingsSection = "General" }) {
+                    Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -492,14 +498,14 @@ private fun KosmosScreen(
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                             item {
                                 SettingsGroup(title = "Arka") {
-                                    Text("Arka is a wallpaper app by ZeroTech for discovering, organizing, and applying static and live wallpapers.", style = MaterialTheme.typography.bodyMedium)
+                                    Text("Arka is a wallpaper engine developed by ZeroTech, built to discover, organize, and apply static and live wallpapers.", style = MaterialTheme.typography.bodyMedium)
                                     Spacer(Modifier.height(8.dp))
                                     Text("Choose wallpapers from your gallery, explore online artwork, save favorites, and manage your own presets.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                             item {
                                 SettingsGroup(title = "ZeroTech") {
-                                    Text("ZeroTech is the team behind Arka and its supporting projects.", style = MaterialTheme.typography.bodyMedium)
+                                    Text("ZeroTech is an independent software studio creating thoughtful digital tools and experiences. Arka is one of its projects, built with a focus on expressive design, useful features, and a polished everyday experience.", style = MaterialTheme.typography.bodyMedium)
                                     Spacer(Modifier.height(8.dp))
                                     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                                     TextButton(onClick = { uriHandler.openUri("https://swar4j.space") }) { Text("swar4j.space") }
@@ -1181,7 +1187,7 @@ private fun WallpaperTile(
                 TextButton(onClick = onFavorite, modifier = Modifier.align(Alignment.TopEnd).padding(2.dp)) {
                     Text(
                         if (favorite) "★" else "☆",
-                        color = if (favorite) Color(0xFFFFC928) else Color(0xFF30251A),
+                        color = if (favorite) Color(0xFFFFC928) else Color(0xFFFFE9C7),
                         style = MaterialTheme.typography.titleLarge
                     )
                 }
