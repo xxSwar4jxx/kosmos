@@ -106,7 +106,13 @@ fun PresetTile(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onApply) { Text("Apply") }
-                TextButton(onClick = onRemove) { Text("Remove") }
+                if (wallpaper.isPreset) {
+                    Text("Preinstalled", modifier = Modifier.padding(horizontal = 8.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    TextButton(onClick = onRemove) { Text("Remove") }
+                }
             }
         }
     }
