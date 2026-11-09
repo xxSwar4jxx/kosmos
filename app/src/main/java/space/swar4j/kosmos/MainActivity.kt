@@ -89,6 +89,9 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -548,12 +551,13 @@ private fun KosmosScreen(
                                 discoverIndex = nextIndex
                                 scope.launch {
                                     isDiscoverLoading = true
-                                    val refreshed = mutableListOf<OnlineWallpaperResult>()
-                                    for (offset in 0 until 3) {
-                                        val query = discoverQueries[(nextIndex + offset) % discoverQueries.size]
-                                        val batch = runCatching { OnlineWallpaperSearch().search(query, page = 1) }.getOrDefault(emptyList())
-                                        refreshed += batch
-                                        if (refreshed.size >= 24) break
+                                    val refreshed = coroutineScope {
+                                        (0 until 3).map { offset ->
+                                            async {
+                                                val query = discoverQueries[(nextIndex + offset) % discoverQueries.size]
+                                                runCatching { OnlineWallpaperSearch().search(query, page = 1) }.getOrDefault(emptyList())
+                                            }
+                                        }.awaitAll().flatten()
                                     }
                                     if (refreshed.isNotEmpty()) {
                                         discoverResults = refreshed.distinctBy { it.id }.take(24)
