@@ -24,6 +24,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -235,7 +236,6 @@ private fun KosmosScreen(
     var settingsSection by rememberSaveable { mutableStateOf("General") }
     val settings = remember { context.getSharedPreferences("arka_settings", android.content.Context.MODE_PRIVATE) }
     var applyPresetTo by rememberSaveable { mutableStateOf(settings.getString("apply_presets_to", "ask") ?: "ask") }
-    var showNsfwSetting by rememberSaveable { mutableStateOf(false) }
 
     val performOnlineSearch: () -> Unit = {
         if (hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline) {
@@ -1367,7 +1367,7 @@ private val SUPPORTED_MIME_TYPES = arrayOf(
 )
 
 @Composable
-private fun SettingsGroup(title: String, content: @Composable Column.() -> Unit) {
+private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
