@@ -19,57 +19,70 @@ data class OnlineWallpaperResult(
 
 class OnlineWallpaperSearch {
     suspend fun search(query: String): List<OnlineWallpaperResult> = withContext(Dispatchers.IO) {
-        val cleanQuery = query.trim().take(100)
+        val cleanQuery = query.trim().replace(Regex("\\s+"), " ").take(100)
         if (cleanQuery.isBlank()) return@withContext emptyList()
-        val encoded = URLEncoder.encode(cleanQuery, Charsets.UTF_8.name())
-        val endpoint = URL(
-            "https://commons.wikimedia.org/w/api.php?action=query&generator=search" +
-                "&gsrsearch=filetype:bitmap%20$encoded&gsrnamespace=6&gsrlimit=30" +
-                "&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=640&format=json"
-        )
-        val connection = (endpoint.openConnection() as HttpURLConnection).apply {
-            connectTimeout = 8_000
-            readTimeout = 12_000
-            instanceFollowRedirects = false
-            requestMethod = "GET"
-            setRequestProperty("User-Agent", "Kosmos-Android/1.0 (wallpaper search)")
-            setRequestProperty("Accept", "application/json")
-        }
-        try {
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                throw IOException("Image search failed (HTTP ${connection.responseCode})")
+
+        val primaryQuery = cleanQuery.replace(Regex("(?i)zero\\s*two|zerotwo"), "Zero Two Darling in the Franxx")
+        val queries = linkedSetOf(primaryQuery, "$primaryQuery anime")
+        val results = LinkedHashMap<Long, OnlineWallpaperResult>()
+
+        for (searchTerm in queries) {
+            if (results.size >= MAX_RESULTS) break
+            val encoded = URLEncoder.encode(searchTerm, Charsets.UTF_8.name())
+            val endpoint = URL(
+                "https://commons.wikimedia.org/w/api.php?action=query&generator=search" +
+                    "&gsrsearch=$encoded&gsrnamespace=6&gsrlimit=50&gsrsort=relevance" +
+                    "&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=640&format=json"
+            )
+            val connection = (endpoint.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                instanceFollowRedirects = false
+                requestMethod = "GET"
+                setRequestProperty(
+                    "User-Agent",
+                    "KosmosAndroid/0.5 (wallpaper search; https://github.com/xxSwar4jxx/kosmos)"
+                )
+                setRequestProperty("Accept", "application/json")
             }
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val pages = JSONObject(body).optJSONObject("query")?.optJSONObject("pages")
-                ?: return@withContext emptyList()
-            buildList {
+            try {
+                val status = connection.responseCode
+                if (status != HttpURLConnection.HTTP_OK) {
+                    if (status == 429) throw IOException("Wikimedia is rate-limiting requests. Wait a moment and try again.")
+                    throw IOException("Image search failed (HTTP $status)")
+                }
+                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                val pages = JSONObject(body).optJSONObject("query")?.optJSONObject("pages")
+                    ?: continue
                 val keys = pages.keys()
-                while (keys.hasNext() && size < 30) {
+                while (keys.hasNext() && results.size < MAX_RESULTS) {
                     val page = pages.optJSONObject(keys.next()) ?: continue
                     val info = page.optJSONArray("imageinfo")?.optJSONObject(0) ?: continue
                     val preview = info.optString("thumburl")
                     val original = info.optString("url")
                     if (!isCommonsImageUrl(preview) || !isCommonsImageUrl(original)) continue
                     val extension = URL(original).path.substringAfterLast('.', "").lowercase()
-                    if (extension !in setOf("jpg", "jpeg", "png", "webp", "gif")) continue
+                    if (extension !in SUPPORTED_IMAGE_EXTENSIONS) continue
                     val metadata = info.optJSONObject("extmetadata")
-                    add(
-                        OnlineWallpaperResult(
-                            id = page.optLong("pageid"),
-                            title = page.optString("title").removePrefix("File:").take(100),
-                            previewUrl = preview,
-                            downloadUrl = original,
-                            creator = metadata?.optJSONObject("Artist")?.optString("value")
-                                ?.replace(Regex("<[^>]*>"), "")?.take(120).orEmpty().ifBlank { "Unknown creator" },
-                            license = metadata?.optJSONObject("LicenseShortName")?.optString("value")
-                                ?.take(60).orEmpty().ifBlank { "See source for license" }
-                        )
+                    val id = page.optLong("pageid")
+                    if (id <= 0 || results.containsKey(id)) continue
+                    results[id] = OnlineWallpaperResult(
+                        id = id,
+                        title = page.optString("title").removePrefix("File:").take(100),
+                        previewUrl = preview,
+                        downloadUrl = original,
+                        creator = metadata?.optJSONObject("Artist")?.optString("value")
+                            ?.replace(Regex("<[^>]*>"), "")?.take(120).orEmpty()
+                            .ifBlank { "Unknown creator" },
+                        license = metadata?.optJSONObject("LicenseShortName")?.optString("value")
+                            ?.take(60).orEmpty().ifBlank { "See source for license" }
                     )
                 }
+            } finally {
+                connection.disconnect()
             }
-        } finally {
-            connection.disconnect()
         }
+        results.values.toList()
     }
 
     private fun isCommonsImageUrl(value: String): Boolean = runCatching {
@@ -77,4 +90,9 @@ class OnlineWallpaperSearch {
         url.protocol == "https" && url.host.equals("upload.wikimedia.org", ignoreCase = true) &&
             url.userInfo == null && (url.port == -1 || url.port == 443)
     }.getOrDefault(false)
+
+    companion object {
+        private const val MAX_RESULTS = 40
+        private val SUPPORTED_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")
+    }
 }
