@@ -50,6 +50,16 @@ class OnlineWallpaperSearch {
 
             (openverse.getOrDefault(emptyList()) + commons.getOrDefault(emptyList()))
                 .distinctBy { it.downloadUrl.substringBefore('?') }
+                .sortedByDescending { result ->
+                    val title = result.title.lowercase()
+                    terms.sumOf { term ->
+                        when {
+                            title == term -> 8
+                            title.contains(term) -> 4
+                            else -> 0
+                        }
+                    }
+                }
                 .take(40)
         }
 
