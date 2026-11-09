@@ -804,16 +804,41 @@ private fun CatalogueTile(
     downloading: Boolean,
     onDownload: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val previewRequest = remember(item.previewUrl) {
+        ImageRequest.Builder(context)
+            .data(item.previewUrl)
+            .crossfade(true)
+            .setHeader("User-Agent", "KosmosAndroid/0.5 (catalogue previews; https://github.com/xxSwar4jxx/kosmos)")
+            .setHeader("Accept", "image/avif,image/webp,image/*,*/*;q=0.8")
+            .build()
+    }
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AsyncImage(
-                model = item.previewUrl,
+            SubcomposeAsyncImage(
+                model = previewRequest,
                 contentDescription = item.title,
                 modifier = Modifier.size(width = 104.dp, height = 140.dp).clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                loading = {
+                    Box(
+                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+                },
+                error = {
+                    Box(
+                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Preview unavailable", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                success = { SubcomposeAsyncImageContent() }
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.SpaceBetween) {
                 Column {
