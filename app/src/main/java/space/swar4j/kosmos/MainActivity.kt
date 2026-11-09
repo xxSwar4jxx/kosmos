@@ -215,14 +215,19 @@ private fun KosmosScreen(
     val performOnlineSearch: () -> Unit = {
         if (hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline) {
             tab = "Search"
+            isSearchingOnline = true
+            onlinePage = 1
+            onlineResults = emptyList()
             scope.launch {
-                isSearchingOnline = true
-                onlinePage = 1
-                onlineResults = emptyList()
-                runCatching { OnlineWallpaperSearch().search(onlineQuery, page = 1) }
-                    .onSuccess { onlineResults = it }
-                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "Image search failed") }
-                isSearchingOnline = false
+                try {
+                    val results = OnlineWallpaperSearch().search(onlineQuery, page = 1)
+                    onlineResults = results
+                    if (results.isEmpty()) snackbarHostState.showSnackbar("No matching images found. Try a broader search.")
+                } catch (error: Exception) {
+                    snackbarHostState.showSnackbar(error.message ?: "Image search failed")
+                } finally {
+                    isSearchingOnline = false
+                }
             }
         }
     }
@@ -278,10 +283,20 @@ private fun KosmosScreen(
     LaunchedEffect(tab, hasInternet) {
         if (tab == "Discover" && hasInternet && discoverResults.isEmpty() && !isDiscoverLoading) {
             isDiscoverLoading = true
-            runCatching { OnlineWallpaperSearch().search(discoverQueries[discoverIndex], page = 1) }
-                .onSuccess { discoverResults = it }
-                .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't load Discover") }
-            isDiscoverLoading = false
+            try {
+                val initialQueries = (0 until 3).map { offset ->
+                    discoverQueries[(discoverIndex + offset) % discoverQueries.size]
+                }
+                val results = coroutineScope {
+                    initialQueries.map { query ->
+                        async { runCatching { OnlineWallpaperSearch().search(query, page = 1) }.getOrDefault(emptyList()) }
+                    }.awaitAll().flatten()
+                }.distinctBy { it.downloadUrl.substringBefore('?') }.take(30)
+                discoverResults = results
+                if (results.isEmpty()) snackbarHostState.showSnackbar("Discover couldn't find images right now. Try Refresh.")
+            } finally {
+                isDiscoverLoading = false
+            }
         }
     }
 
@@ -294,7 +309,7 @@ private fun KosmosScreen(
             "Favorites" -> metadata.isFavorite(wallpaper.file.name)
             "Photos" -> !wallpaper.isAnimated
             "Animated" -> wallpaper.isAnimated
-            "Presets" -> metadata.isPreset(wallpaper.file.name)
+            "Presets" -> wallpaper.isPreset || metadata.isPreset(wallpaper.file.name)
             in WallpaperMetadataStore.CATEGORIES -> metadata.category(wallpaper.file.name) == filter
             else -> true
         }
@@ -323,18 +338,12 @@ private fun KosmosScreen(
                 OutlinedTextField(
                     value = onlineQuery,
                     onValueChange = { onlineQuery = it },
-                    modifier = Modifier.width(148.dp),
+                    modifier = Modifier.width(148.dp).height(48.dp),
                     singleLine = true,
                     enabled = hasInternet && !isSearchingOnline,
                     placeholder = { Text("SEARCH") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { performOnlineSearch() }),
-                    trailingIcon = {
-                        IconButton(
-                            onClick = performOnlineSearch,
-                            enabled = hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline
-                        ) { Icon(Icons.Outlined.Search, contentDescription = "Search") }
-                    }
                 )
             }
 
@@ -619,7 +628,7 @@ private fun KosmosScreen(
                     }
                 }
             } else if (tab == "Presets") {
-                val userPresets = wallpapers.filter { metadata.isPreset(it.file.name) }
+                val userPresets = wallpapers.filter { it.isPreset || metadata.isPreset(it.file.name) }
                 if (userPresets.isEmpty()) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("No Presets are currently saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
