@@ -39,14 +39,12 @@ class OnlineWallpaperSearch {
             if (terms.isEmpty()) return@withContext emptyList()
 
             val safePage = page.coerceAtLeast(1)
-            val animeResults = coroutineScope {
-                async { runCatching { searchAnimeProviders(clean, safePage) }.getOrDefault(emptyList()) }
-            }.await()
-            val generalProviders = coroutineScope {
+            val (animeResults, generalProviders) = coroutineScope {
+                val animeCall = async { runCatching { searchAnimeProviders(clean, safePage) }.getOrDefault(emptyList()) }
                 val openverseCall = async { runCatching { searchOpenverse(clean, terms, safePage) }.getOrDefault(emptyList()) }
                 val commonsCall = async { runCatching { searchCommons(clean, terms, safePage) }.getOrDefault(emptyList()) }
-                openverseCall.await() to commonsCall.await()
-            }
+                Triple(animeCall.await(), openverseCall.await(), commonsCall.await()).let { Triple(it.first, it.second to it.third, Unit) }
+            }.let { it.first to it.second }
             // Anime results take priority. General providers are only shown when
             // AniList/Danbooru cannot find a relevant anime illustration.
             val selected = if (animeResults.isNotEmpty()) animeResults
@@ -192,7 +190,7 @@ class OnlineWallpaperSearch {
         val normalized = lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "_").trim('_')
         if (normalized.isBlank()) return ""
         val exclusions = if (allowCosplay) "" else " -cosplay -photo -photorealistic -realistic -3d -irl"
-        return "${normalized.replace("_", " ")} rating:s$exclusions"
+        return "${normalized} rating:s$exclusions"
     }
 
     private fun searchOpenverse(
