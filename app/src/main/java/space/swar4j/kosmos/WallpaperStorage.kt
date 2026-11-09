@@ -78,7 +78,7 @@ class WallpaperStorage(private val context: Context) {
                         val count = source.read(buffer)
                         if (count < 0) break
                         totalBytes += count
-                        if (totalBytes > maxBytes) throw IOException("This file exceeds Kosmos' import size limit")
+                        if (totalBytes > maxBytes) throw IOException("This file exceeds Arka's import size limit")
                         output.write(buffer, 0, count)
                     }
                 }
@@ -551,7 +551,7 @@ class WallpaperStorage(private val context: Context) {
         private const val READ_TIMEOUT_MS = 25_000
         private const val MAX_REDIRECTS = 4
         private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
-        private val DOWNLOAD_HOSTS = setOf("commons.wikimedia.org", "upload.wikimedia.org", "api.openverse.org", "images.unsplash.com")
+        private val DOWNLOAD_HOSTS = setOf("commons.wikimedia.org", "upload.wikimedia.org", "api.openverse.org", "images.unsplash.com", "images.pexels.com", "live.staticflickr.com", "cdn.pixabay.com", "images.pexels.com", "i0.wp.com", "i1.wp.com")
         private val SUPPORTED_EXTENSIONS = setOf("jpg", "png", "webp", "gif", "mp4")
     }
 }
