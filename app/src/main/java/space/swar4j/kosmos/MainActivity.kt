@@ -551,7 +551,7 @@ private fun KosmosScreen(
                                 onUseAsWallpaper = {
                                     if (downloadingId == null) scope.launch {
                                         downloadingId = "discover-${result.id}"
-                                        runCatching { storage.downloadSearchResult(result) }
+                                        runCatching { storage.downloadSearchResult(result, allowDuplicate = false) }
                                             .onSuccess { downloaded ->
                                                 refreshLibrary()
                                                 deleteAfterApply = true
@@ -649,7 +649,7 @@ private fun KosmosScreen(
                                     onUseAsWallpaper = {
                                         if (downloadingId == null) scope.launch {
                                             downloadingId = "search-${result.id}"
-                                            runCatching { storage.downloadSearchResult(result) }
+                                            runCatching { storage.downloadSearchResult(result, allowDuplicate = false) }
                                                 .onSuccess { downloaded ->
                                                     refreshLibrary()
                                                     deleteAfterApply = true
