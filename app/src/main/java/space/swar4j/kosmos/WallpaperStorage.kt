@@ -186,7 +186,8 @@ class WallpaperStorage(private val context: Context) {
                 readTimeout = READ_TIMEOUT_MS
                 instanceFollowRedirects = false
                 requestMethod = "GET"
-                setRequestProperty("User-Agent", "Kosmos-Android")
+                setRequestProperty("User-Agent", "KosmosAndroid/0.5 (wallpaper downloader; https://github.com/xxSwar4jxx/kosmos)")
+                setRequestProperty("Api-User-Agent", "KosmosAndroid/0.5 (wallpaper downloader; https://github.com/xxSwar4jxx/kosmos)")
                 setRequestProperty("Accept", "image/jpeg,image/png,image/webp,image/gif,video/mp4")
             }
             try {
@@ -197,6 +198,9 @@ class WallpaperStorage(private val context: Context) {
                         ?: throw IOException("Invalid download redirect")
                     current = URL(current, location)
                     return@repeat
+                }
+                if (status == 429) {
+                    throw IOException("Wikimedia is temporarily rate-limiting downloads. Wait a little and try again.")
                 }
                 if (status != HttpURLConnection.HTTP_OK) throw IOException("Download failed (HTTP $status)")
                 if (current.host.lowercase() !in DOWNLOAD_HOSTS) throw IOException("Untrusted download host")
