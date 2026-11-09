@@ -534,6 +534,10 @@ class WallpaperStorage(private val context: Context) {
                 "preset_violet" -> "Violet Horizon"
                 "preset_ocean" -> "Deep Current"
                 "preset_ember" -> "Ember"
+                "preset_mist" -> "Silver Mist"
+                "preset_nebula" -> "Nebula Bloom"
+                "preset_citrus" -> "Citrus Glow"
+                "preset_midnight" -> "Midnight Grid"
                 else -> duplicate.nameWithoutExtension
             }
         } else duplicate.nameWithoutExtension.substringBefore("__").replace("-", " ").take(48)
