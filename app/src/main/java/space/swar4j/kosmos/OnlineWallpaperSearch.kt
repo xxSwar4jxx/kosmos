@@ -61,7 +61,7 @@ class OnlineWallpaperSearch {
         val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
         val endpoint = URL(
             "https://api.openverse.org/v1/images/?q=$encoded" +
-                "&page=$page&page_size=40&license_type=all-cc&mature=false"
+                "&page=$page&page_size=20&license_type=all-cc&mature=false"
         )
         val root = requestJson(endpoint)
         val results = root.optJSONArray("results") ?: return emptyList()
@@ -91,7 +91,7 @@ class OnlineWallpaperSearch {
 
                 val thumbnail = item.optString("thumbnail")
                 val preview = normalizeOpenverseUrl(thumbnail)
-                if (!isAllowedImageUrl(preview, setOf("api.openverse.org"))) continue
+                if (!isSecureImageUrl(preview)) continue
 
                 // Openverse serves the full image through its own thumbnail endpoint,
                 // so the app never has to trust arbitrary third-party download hosts.
@@ -150,9 +150,9 @@ class OnlineWallpaperSearch {
                     .replace(Regex("<[^>]*>"), " ")
                     .replace(Regex("\\s+"), " ").trim()
                 val searchable = "$title $description".lowercase()
-                if (relevanceScore(searchable, terms) < minimumMatches(terms)) continue
-                if (!isAllowedImageUrl(preview, setOf("upload.wikimedia.org")) ||
-                    !isAllowedImageUrl(download, setOf("upload.wikimedia.org"))
+                if (relevanceScore(searchable, terms) == 0) continue
+                if (!isSecureImageUrl(preview) ||
+                    !isSecureImageUrl(download)
                 ) continue
 
                 val extension = download.substringBefore('?')
@@ -189,7 +189,7 @@ class OnlineWallpaperSearch {
             requestMethod = "GET"
             setRequestProperty(
                 "User-Agent",
-                "KosmosAndroid/0.7 (wallpaper search; https://github.com/xxSwar4jxx/kosmos)"
+                "ArkaAndroid/0.8 (wallpaper search; https://github.com/xxSwar4jxx/kosmos)"
             )
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Referer", referer)
@@ -217,12 +217,11 @@ class OnlineWallpaperSearch {
         return terms.count { term -> term in tokens || normalized.contains(term) }
     }
 
-    private fun minimumMatches(terms: List<String>): Int =
-        if (terms.size <= 2) terms.size else (terms.size + 1) / 2
+    private fun minimumMatches(terms: List<String>): Int = 1
 
-    private fun isAllowedImageUrl(value: String, hosts: Set<String>): Boolean = runCatching {
+    private fun isSecureImageUrl(value: String): Boolean = runCatching {
         val url = URL(value)
-        url.protocol == "https" && url.host.lowercase() in hosts &&
+        url.protocol == "https" && url.host.isNotBlank() &&
             url.userInfo == null && (url.port == -1 || url.port == 443)
     }.getOrDefault(false)
 
