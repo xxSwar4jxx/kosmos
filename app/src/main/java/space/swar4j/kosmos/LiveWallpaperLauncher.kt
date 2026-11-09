@@ -25,6 +25,7 @@ class LiveWallpaperLauncher(context: Context) {
                 remove(PLAYBACK_ERROR)
                 remove(PLAYBACK_ERROR_CODE)
                 remove(PLAYBACK_ERROR_CATEGORY)
+                remove(PLAYBACK_ERROR_DETAIL)
             }
 
         val component = ComponentName(appContext, KosmosLiveWallpaperService::class.java)
@@ -41,5 +42,6 @@ class LiveWallpaperLauncher(context: Context) {
         const val PLAYBACK_ERROR = "playback_error"
         const val PLAYBACK_ERROR_CODE = "playback_error_code"
         const val PLAYBACK_ERROR_CATEGORY = "playback_error_category"
+        const val PLAYBACK_ERROR_DETAIL = "playback_error_detail"
     }
 }
