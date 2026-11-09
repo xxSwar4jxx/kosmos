@@ -15,6 +15,9 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Install the exact original Arka brand images
+        run: bash apply-arka-assets.sh
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
