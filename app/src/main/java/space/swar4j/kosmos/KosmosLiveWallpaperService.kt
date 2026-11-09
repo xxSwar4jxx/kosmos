@@ -59,6 +59,14 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private var playbackGeneration = 0
         private var playbackPaused = false
         private var fallbackVisible = true
+
+        init {
+            // Start preparing MP4 media as soon as Android creates the wallpaper engine,
+            // before the home-screen surface is ready. The first frame can then render
+            // immediately when Android attaches the surface.
+            handler.post { prewarmSelectedVideo() }
+        }
+
         private val videoLoadTimeout = Runnable {
             if (player != null && fallbackVisible) {
                 val source = activeVideoFile
@@ -109,6 +117,10 @@ class KosmosLiveWallpaperService : WallpaperService() {
                         playbackPaused = false
                         player?.playWhenReady = true
                         player?.play()
+                        if (fallbackVisible) {
+                            handler.removeCallbacks(videoLoadTimeout)
+                            handler.postDelayed(videoLoadTimeout, VIDEO_LOAD_TIMEOUT_MS)
+                        }
                     }
                 }
                 return
@@ -202,6 +214,21 @@ class KosmosLiveWallpaperService : WallpaperService() {
             }
         }
 
+        private fun prewarmSelectedVideo() {
+            if (player != null || !isVisible && videoTranscodeInProgress) return
+            val path = getSharedPreferences(
+                LiveWallpaperLauncher.PREFERENCES,
+                MODE_PRIVATE
+            ).getString(LiveWallpaperLauncher.ACTIVE_WALLPAPER_PATH, null) ?: return
+            val file = runCatching { File(path).canonicalFile }.getOrNull() ?: return
+            val wallpaperDirectory = File(filesDir, "wallpapers").canonicalFile
+            if (file.parentFile == wallpaperDirectory && file.isFile && file.canRead() &&
+                file.extension.equals("mp4", ignoreCase = true)
+            ) {
+                startVideo(file)
+            }
+        }
+
         private fun startPlayback() {
             if (!isVisible || playbackPaused || !surfaceHolder.surface.isValid ||
                 surfaceWidth <= 0 || surfaceHeight <= 0 ||
@@ -288,18 +315,20 @@ class KosmosLiveWallpaperService : WallpaperService() {
             })
 
             runCatching {
-                exo.setVideoSurfaceHolder(surfaceHolder)
+                if (surfaceHolder.surface.isValid) exo.setVideoSurfaceHolder(surfaceHolder)
                 exo.setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(file)))
                 exo.prepare()
-                exo.playWhenReady = true
+                exo.playWhenReady = isVisible && surfaceHolder.surface.isValid
             }.onFailure {
                 if (player === exo) {
                     stopVideoPlayer(exo)
                     startFfmpegFallback(file, "Media3 preparation failed: ${it.javaClass.simpleName}")
                 }
             }
-            handler.removeCallbacks(videoLoadTimeout)
-            handler.postDelayed(videoLoadTimeout, VIDEO_LOAD_TIMEOUT_MS)
+            if (surfaceHolder.surface.isValid) {
+                handler.removeCallbacks(videoLoadTimeout)
+                handler.postDelayed(videoLoadTimeout, VIDEO_LOAD_TIMEOUT_MS)
+            }
         }
 
 
