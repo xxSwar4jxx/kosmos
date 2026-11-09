@@ -24,6 +24,7 @@ enum class PlaybackError(
     VIDEO_PLAYER_INIT_FAILED("KOS-VIDEO-001", "Playback", "The video player could not be started."),
     VIDEO_PREPARE_FAILED("KOS-VIDEO-002", "Playback", "The video could not be prepared."),
     VIDEO_PLAYBACK_FAILED("KOS-VIDEO-003", "Playback", "The video could not be played."),
+    VIDEO_FORMAT_UNSUPPORTED("KOS-VIDEO-005", "Format", "This video codec or profile is not supported by this device."),
     VIDEO_START_TIMEOUT("KOS-VIDEO-004", "Timeout", "The video did not start in time."),
     GIF_DECODE_FAILED("KOS-GIF-001", "Decoding", "The GIF could not be decoded."),
     GIF_UNSUPPORTED("KOS-GIF-002", "Format", "This GIF is not animated or is unsupported on this Android version."),
@@ -36,7 +37,7 @@ object PlaybackFailureNotifier {
     private const val CHANNEL_ID = "wallpaper_playback_errors"
     private const val NOTIFICATION_ID = 4102
 
-    fun show(context: Context, failure: PlaybackError) {
+    fun show(context: Context, failure: PlaybackError, detail: String? = null) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -64,7 +65,12 @@ object PlaybackFailureNotifier {
             .setContentText(failure.message)
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
-                    "${failure.message}\nCode: ${failure.code}\nCategory: ${failure.category}"
+                    buildString {
+                        append(failure.message)
+                        append("\nCode: ${failure.code}")
+                        append("\nCategory: ${failure.category}")
+                        if (!detail.isNullOrBlank()) append("\nDetails: $detail")
+                    }
                 )
             )
             .setSubText("${failure.code} • ${failure.category}")
