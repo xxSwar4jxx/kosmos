@@ -34,7 +34,7 @@ Kosmos is an Android wallpaper library for static images and animated wallpapers
 
 MP4 playback first uses AndroidX Media3 and the device MediaCodec decoders. If those fail to initialize or render a frame, Kosmos uses the GPL-3.0 FFmpegKit Android build to decode the video into a temporary, muted animated GIF in app cache, then renders it through the existing GIF wallpaper path. The fallback is capped at 30 seconds and 10 frames per second to limit CPU and storage use. The temporary conversion is deleted when playback stops.
 
-FFmpegKit Android is provided by the independent [ffmpegkit-maintained/ffmpeg](https://github.com/ffmpegkit-maintained/ffmpeg) project, using the pinned `dev.ffmpegkit-maintained:ffmpeg-kit-full-gpl:8.1.9` artifact. It is not affiliated with the original FFmpegKit authors. See the dependency's bundled third-party notices and upstream source for component-level licensing.
+FFmpegKit Android is provided by the independent [ffmpegkit-maintained/ffmpeg](https://github.com/ffmpegkit-maintained/ffmpeg) project, using the pinned `dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.9` artifact. It is not affiliated with the original FFmpegKit authors. See the dependency's bundled third-party notices and upstream source for component-level licensing.
 
 ## Build
 
