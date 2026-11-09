@@ -27,6 +27,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -142,9 +143,9 @@ class KosmosLiveWallpaperService : WallpaperService() {
         @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
         private fun startVideo(file: File) {
             val exo = runCatching {
-                val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
-                    // Keep Android's device-specific codec priority. Forcing software first selected
-                    // c2.android.avc.decoder on affected devices and failed for High Profile AVC.
+                val renderersFactory = NextRenderersFactory(this@KosmosLiveWallpaperService)
+                    // Prefer bundled FFmpeg AVC decoding when the device's vendor decoder cannot initialize.
+                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
                     .setEnableDecoderFallback(true)
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService, renderersFactory).build()
             }.getOrElse {
@@ -332,9 +333,9 @@ class KosmosLiveWallpaperService : WallpaperService() {
                         val targetHeight = targetWidth * logo.height / logo.width.toFloat()
                         val destination = RectF(
                             centerX - targetWidth / 2f,
-                            centerY - unit * 0.30f,
+                            centerY - unit * 0.45f,
                             centerX + targetWidth / 2f,
-                            centerY - unit * 0.19f + targetHeight
+                            centerY - unit * 0.45f + targetHeight
                         )
                         canvas.drawBitmap(logo, null, destination, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
                     }
