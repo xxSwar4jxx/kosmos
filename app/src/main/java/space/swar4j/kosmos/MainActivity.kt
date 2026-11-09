@@ -197,6 +197,7 @@ private fun KosmosScreen(
     var showAddPresetDialog by remember { mutableStateOf(false) }
     var discoverResults by remember { mutableStateOf<List<OnlineWallpaperResult>>(emptyList()) }
     var discoverIndex by rememberSaveable { mutableIntStateOf(0) }
+    val discoverQueries = remember { listOf("nature landscape", "space nebula", "abstract wallpaper", "anime illustration", "night city architecture", "ocean mountain") }
     var filter by rememberSaveable { mutableStateOf("All") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showCategoryMenu by remember { mutableStateOf(false) }
@@ -219,6 +220,23 @@ private fun KosmosScreen(
                     snackbarHostState.showSnackbar("Added to your library")
                 }
                 .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't import this file") }
+            isImporting = false
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(20)
+    ) { uris ->
+        if (uris.isNotEmpty()) scope.launch {
+            isImporting = true
+            var imported = 0
+            uris.forEach { uri ->
+                runCatching { storage.importMedia(uri) }
+                    .onSuccess { imported++ }
+                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't import a selected item") }
+            }
+            refreshLibrary()
+            snackbarHostState.showSnackbar("$imported item(s) added from gallery")
             isImporting = false
         }
     }
