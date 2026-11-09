@@ -328,7 +328,92 @@ private fun KosmosScreen(
             }
             Spacer(Modifier.height(12.dp))
 
-            if (tab == "Library") {
+            if (tab == "Home") {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            HomeActionCard(
+                                title = "Import from gallery",
+                                icon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isImporting,
+                                onClick = {
+                                    galleryLauncher.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                                        )
+                                    )
+                                }
+                            )
+                            HomeActionCard(
+                                title = "Import from files",
+                                icon = { Icon(Icons.Outlined.FolderOpen, contentDescription = null) },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isImporting,
+                                onClick = { importLauncher.launch(SUPPORTED_MIME_TYPES) }
+                            )
+                            HomeActionCard(
+                                title = "Presets",
+                                icon = { Icon(Icons.Outlined.Wallpaper, contentDescription = null) },
+                                modifier = Modifier.weight(1f),
+                                enabled = true,
+                                onClick = { tab = "Presets" }
+                            )
+                        }
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Favorites", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                            TextButton(onClick = { tab = "Library"; filter = "Favorites" }) { Text("View all") }
+                        }
+                        val favorites = wallpapers.filter { metadata.isFavorite(it.file.name) }.take(2)
+                        if (favorites.isEmpty()) {
+                            Text("No favorites saved yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                favorites.forEach { wallpaper ->
+                                    MiniWallpaperTile(
+                                        wallpaper = wallpaper,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { selectedWallpaper = wallpaper }
+                                    )
+                                }
+                                if (favorites.size == 1) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Recently added", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.weight(1f))
+                            TextButton(onClick = { tab = "Library" }) { Text("Library") }
+                        }
+                        val recent = wallpapers.filterNot { it.file.name.startsWith("preset_") }.take(2)
+                        if (recent.isEmpty()) {
+                            Text("Import a wallpaper to get started.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                recent.forEach { wallpaper ->
+                                    MiniWallpaperTile(
+                                        wallpaper = wallpaper,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { selectedWallpaper = wallpaper }
+                                    )
+                                }
+                                if (recent.size == 1) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            } else if (tab == "Library") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
