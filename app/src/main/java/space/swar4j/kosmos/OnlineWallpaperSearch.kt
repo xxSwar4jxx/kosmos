@@ -22,12 +22,22 @@ class OnlineWallpaperSearch {
         val cleanQuery = query.trim().replace(Regex("\\s+"), " ").take(100)
         if (cleanQuery.isBlank()) return@withContext emptyList()
 
-        val primaryQuery = cleanQuery.replace(Regex("(?i)zero\\s*two|zerotwo"), "Zero Two Darling in the Franxx")
-        val queries = linkedSetOf(
-            "intitle:\"$primaryQuery\"",
-            "\"$primaryQuery\"",
-            "$primaryQuery wallpaper"
-        )
+        val isZeroTwo = Regex("(?i)zero\\s*two|zerotwo").containsMatchIn(cleanQuery)
+        val primaryQuery = if (isZeroTwo) "Zero Two" else cleanQuery
+        val queries = if (isZeroTwo) {
+            linkedSetOf(
+                "intitle:\"Zero Two\"",
+                "\"Zero Two\"",
+                "intitle:\"Darling in the Franxx\"",
+                "Zero Two anime"
+            )
+        } else {
+            linkedSetOf(
+                "intitle:\"$primaryQuery\"",
+                "\"$primaryQuery\"",
+                "$primaryQuery wallpaper"
+            )
+        }
         val results = LinkedHashMap<Long, OnlineWallpaperResult>()
 
         for (searchTerm in queries) {
