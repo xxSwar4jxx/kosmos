@@ -8,13 +8,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
 
 private val KosmosAmberDark = darkColorScheme(
-    primary = Color(0xFFFFB547), onPrimary = Color(0xFF2A1908),
-    primaryContainer = Color(0xFF563400), onPrimaryContainer = Color(0xFFFFDDB0),
-    secondary = Color(0xFFFFC66E), onSecondary = Color(0xFF2A1908),
+    primary = Color(0xFFFFB547), onPrimary = Color(0xFFFFE9C7),
+    primaryContainer = Color(0xFF563400), onPrimaryContainer = Color(0xFFFFE9C7),
+    secondary = Color(0xFFFFC66E), onSecondary = Color(0xFFFFE9C7),
     background = Color(0xFF090A0D), onBackground = Color(0xFFFFE9C7),
     surface = Color(0xFF15171C), onSurface = Color(0xFFFFE9C7),
-    surfaceVariant = Color(0xFF24262D), onSurfaceVariant = Color(0xFFD0C2AE),
-    outline = Color(0xFF80613D)
+    surfaceVariant = Color(0xFF24262D), onSurfaceVariant = Color(0xFFFFE9C7),
+    error = Color(0xFFFFB4AB), onError = Color(0xFF2A1908),
+    errorContainer = Color(0xFF5C1A12), onErrorContainer = Color(0xFFFFE9C7),
+    outline = Color(0xFF80613D), inverseSurface = Color(0xFFFFE9C7),
+    inverseOnSurface = Color(0xFF090A0D), inversePrimary = Color(0xFF8B5000),
+    surfaceTint = Color(0xFFFFB547)
 )
 
 private val KosmosLight = lightColorScheme(
