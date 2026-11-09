@@ -222,6 +222,7 @@ private fun KosmosScreen(
     var showApplyDialog by remember { mutableStateOf(false) }
     var deleteAfterApply by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
+    var importingForPresets by rememberSaveable { mutableStateOf(false) }
     var isLoadingCatalogue by remember { mutableStateOf(false) }
     var downloadingId by remember { mutableStateOf<String?>(null) }
     var favoriteVersion by remember { mutableIntStateOf(0) }
@@ -287,11 +288,18 @@ private fun KosmosScreen(
             var imported = 0
             uris.forEach { uri ->
                 runCatching { storage.importMedia(uri) }
-                    .onSuccess { imported++ }
+                    .onSuccess { wallpaper ->
+                        imported++
+                        if (importingForPresets) metadata.setPreset(wallpaper.file.name, true)
+                    }
                     .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't import a selected item") }
             }
+            val wasPresetImport = importingForPresets
+            importingForPresets = false
             refreshLibrary()
-            snackbarHostState.showSnackbar("$imported item(s) added from gallery")
+            snackbarHostState.showSnackbar(
+                if (wasPresetImport) "$imported item(s) added to Presets" else "$imported item(s) added from gallery"
+            )
             isImporting = false
         }
     }
@@ -888,8 +896,9 @@ private fun KosmosScreen(
                 val availableToSave = wallpapers.filterNot { it.isPreset || metadata.isPreset(it.file.name) }
                 if (availableToSave.isEmpty()) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Import a wallpaper before adding it to Presets.")
+                        Text("Choose an image or video from your gallery. Arka will copy it into its own storage and add it to Presets.")
                         TextButton(onClick = {
+                            importingForPresets = true
                             showAddPresetDialog = false
                             galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(
                                 ActivityResultContracts.PickVisualMedia.ImageAndVideo
@@ -897,7 +906,15 @@ private fun KosmosScreen(
                         }) { Text("Import from gallery") }
                     }
                 } else {
-                    LazyColumn(Modifier.height(280.dp)) {
+                    Column {
+                        TextButton(onClick = {
+                            importingForPresets = true
+                            showAddPresetDialog = false
+                            galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                            ))
+                        }) { Text("Import from gallery") }
+                        LazyColumn(Modifier.height(280.dp)) {
                         items(availableToSave, key = { it.file.name }) { wallpaper ->
                             TextButton(
                                 onClick = {
@@ -907,6 +924,7 @@ private fun KosmosScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(wallpaper.title, maxLines = 1) }
+                        }
                         }
                     }
                 }
