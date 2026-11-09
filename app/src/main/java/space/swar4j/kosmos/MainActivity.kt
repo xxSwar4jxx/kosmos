@@ -1310,6 +1310,7 @@ private fun CatalogueTile(
     downloading: Boolean,
     onDownload: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val previewRequest = remember(item.previewUrl) {
         ImageRequest.Builder(context)
@@ -1324,28 +1325,38 @@ private fun CatalogueTile(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SubcomposeAsyncImage(
-                model = previewRequest,
-                contentDescription = item.title,
-                modifier = Modifier.size(width = 104.dp, height = 140.dp).clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop,
-                loading = {
-                    Box(
-                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
-                },
-                error = {
-                    Box(
-                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Preview unavailable", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box {
+                SubcomposeAsyncImage(
+                    model = previewRequest,
+                    contentDescription = item.title,
+                    modifier = Modifier.size(width = 104.dp, height = 140.dp).clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop,
+                    loading = {
+                        Box(
+                            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+                    },
+                    error = {
+                        Box(
+                            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Preview unavailable", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
+                    success = { SubcomposeAsyncImageContent() }
+                )
+                Box(Modifier.align(Alignment.TopEnd)) {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = "Image options", tint = Color.White)
                     }
-                },
-                success = { SubcomposeAsyncImageContent() }
-            )
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Save to library") }, enabled = !downloading, onClick = { menuExpanded = false; onDownload() })
+                    }
+                }
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Text(item.title, style = MaterialTheme.typography.titleMedium)
