@@ -419,7 +419,7 @@ private fun KosmosScreen(
             } else {
                 Text("Search the web", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Find wallpapers by keyword from Wikimedia Commons.",
+                    "Find openly licensed images by keyword from Openverse.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall
                 )
