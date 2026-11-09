@@ -25,8 +25,9 @@ class WallpaperMetadataStore(context: Context) {
             fileName.startsWith("preset_dusk") -> "Abstract"
             fileName.startsWith("preset_mono") -> "Minimal"
             fileName.startsWith("preset_solar") || fileName.startsWith("preset_ember") -> "Abstract"
-            fileName.startsWith("preset_violet") -> "Space"
-            fileName.startsWith("preset_ocean") -> "Nature"
+            fileName.startsWith("preset_violet") || fileName.startsWith("preset_nebula") -> "Space"
+            fileName.startsWith("preset_ocean") || fileName.startsWith("preset_mist") -> "Nature"
+            fileName.startsWith("preset_citrus") || fileName.startsWith("preset_midnight") -> "Abstract"
             else -> "Unsorted"
         }
     }
