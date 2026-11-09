@@ -24,6 +24,9 @@ class WallpaperMetadataStore(context: Context) {
             fileName.startsWith("preset_cosmos") -> "Space"
             fileName.startsWith("preset_dusk") -> "Abstract"
             fileName.startsWith("preset_mono") -> "Minimal"
+            fileName.startsWith("preset_solar") || fileName.startsWith("preset_ember") -> "Abstract"
+            fileName.startsWith("preset_violet") -> "Space"
+            fileName.startsWith("preset_ocean") -> "Nature"
             else -> "Unsorted"
         }
     }
@@ -35,6 +38,20 @@ class WallpaperMetadataStore(context: Context) {
         preferences.edit {
             putStringSet(KEY_FAVORITES, favorites)
             remove(categoryKey(fileName))
+        }
+    }
+
+    fun rename(oldFileName: String, newFileName: String) {
+        val favorites = preferences.getStringSet(KEY_FAVORITES, emptySet()).orEmpty().toMutableSet()
+        val presets = preferences.getStringSet(KEY_PRESETS, emptySet()).orEmpty().toMutableSet()
+        val oldCategory = preferences.getString(categoryKey(oldFileName), null)
+        if (favorites.remove(oldFileName)) favorites.add(newFileName)
+        if (presets.remove(oldFileName)) presets.add(newFileName)
+        preferences.edit {
+            putStringSet(KEY_FAVORITES, favorites)
+            putStringSet(KEY_PRESETS, presets)
+            remove(categoryKey(oldFileName))
+            if (oldCategory != null) putString(categoryKey(newFileName), oldCategory)
         }
     }
 
