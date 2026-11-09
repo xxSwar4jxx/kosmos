@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.security.MessageDigest
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
@@ -83,6 +84,10 @@ class WallpaperStorage(private val context: Context) {
                 }
             }
             validateMedia(temporary, extension)
+            findDuplicate(temporary)?.let { existing ->
+                temporary.delete()
+                return@withContext existing
+            }
             if (!temporary.renameTo(destination)) throw IOException("Couldn't save the wallpaper")
             val thumbnail = createThumbnail(destination)
                 ?: throw IOException("Couldn't create a preview for this wallpaper")
@@ -103,6 +108,10 @@ class WallpaperStorage(private val context: Context) {
         try {
             downloadSecure(item.downloadUrl, temporary, maxBytesFor(extension))
             validateMedia(temporary, extension)
+            findDuplicate(temporary)?.let { existing ->
+                temporary.delete()
+                return@withContext existing
+            }
             if (!temporary.renameTo(destination)) throw IOException("Couldn't save the download")
             val thumbnail = createThumbnail(destination)
                 ?: throw IOException("Couldn't create a preview for this download")
@@ -123,6 +132,10 @@ class WallpaperStorage(private val context: Context) {
         try {
             downloadSecure(result.downloadUrl, temporary, MAX_IMAGE_BYTES)
             validateMedia(temporary, extension)
+            findDuplicate(temporary)?.let { existing ->
+                temporary.delete()
+                return@withContext existing
+            }
             if (!temporary.renameTo(destination)) throw IOException("Couldn't save the image")
             val thumbnail = createThumbnail(destination)
                 ?: throw IOException("Couldn't create a preview for this image")
@@ -452,6 +465,43 @@ class WallpaperStorage(private val context: Context) {
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) else "Wallpaper"
         } ?: "Wallpaper"
+
+    private fun findDuplicate(file: File): StoredWallpaper? {
+        val digest = sha256(file)
+        val duplicate = wallpaperDirectory.listFiles()?.firstOrNull { existing ->
+            existing.isFile && existing.extension.lowercase() in SUPPORTED_EXTENSIONS &&
+                existing.length() == file.length() && sha256(existing) == digest
+        } ?: return null
+        val thumbnail = File(thumbnailDirectory, "${duplicate.nameWithoutExtension}.jpg")
+            .takeIf { it.isFile } ?: createThumbnail(duplicate) ?: return null
+        val title = if (duplicate.name.startsWith("preset_")) {
+            when (duplicate.nameWithoutExtension) {
+                "preset_aurora" -> "Aurora"
+                "preset_cosmos" -> "Eventide"
+                "preset_dusk" -> "Afterglow"
+                "preset_mono" -> "Monolith"
+                else -> duplicate.nameWithoutExtension
+            }
+        } else duplicate.nameWithoutExtension.substringBefore("__").replace("-", " ").take(48)
+        return StoredWallpaper(
+            duplicate, title, thumbnail,
+            duplicate.extension.lowercase() in setOf("gif", "mp4"),
+            duplicate.name.startsWith("preset_")
+        )
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
     private fun uniqueDestination(title: String, extension: String): File {
         val safe = title.replace(Regex("\\s+"), "-")
