@@ -83,7 +83,7 @@ class OnlineWallpaperSearch {
                         }
                     }
                 }
-                if (id.isBlank() || relevanceScore(searchable, terms) < minimumMatches(terms)) continue
+                if (id.isBlank()) continue
 
                 val fileType = item.optString("filetype").lowercase()
                     .let { if (it == "jpeg") "jpg" else it }
@@ -150,7 +150,7 @@ class OnlineWallpaperSearch {
                     .replace(Regex("<[^>]*>"), " ")
                     .replace(Regex("\\s+"), " ").trim()
                 val searchable = "$title $description".lowercase()
-                if (relevanceScore(searchable, terms) == 0) continue
+                // Keep provider-ranked matches; strict client-side filtering discarded useful results.
                 if (!isSecureImageUrl(preview) ||
                     !isSecureImageUrl(download)
                 ) continue
@@ -217,9 +217,7 @@ class OnlineWallpaperSearch {
         return terms.count { term -> term in tokens || normalized.contains(term) }
     }
 
-    private fun minimumMatches(terms: List<String>): Int = 1
-
-    private fun isSecureImageUrl(value: String): Boolean = runCatching {
+        private fun isSecureImageUrl(value: String): Boolean = runCatching {
         val url = URL(value)
         url.protocol == "https" && url.host.isNotBlank() &&
             url.userInfo == null && (url.port == -1 || url.port == 443)
