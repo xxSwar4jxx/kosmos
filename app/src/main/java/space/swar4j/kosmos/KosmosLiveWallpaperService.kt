@@ -27,6 +27,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -43,6 +45,9 @@ class KosmosLiveWallpaperService : WallpaperService() {
         }
 
         private var player: ExoPlayer? = null
+        private var activeVideoFile: File? = null
+        private var videoTranscodeInProgress = false
+        private var transcodedGif: File? = null
         private var zeroTechLogo: Bitmap? = null
         private var gifMovie: Movie? = null
         private var gifDrawable: Drawable? = null
@@ -54,8 +59,13 @@ class KosmosLiveWallpaperService : WallpaperService() {
         private var fallbackVisible = true
         private val videoLoadTimeout = Runnable {
             if (player != null && fallbackVisible) {
-                reportPlaybackFailure(PlaybackError.VIDEO_START_TIMEOUT)
+                val source = activeVideoFile
                 player?.let(::stopVideoPlayer)
+                if (source != null) {
+                    startFfmpegFallback(source, "Media3 did not render a frame before the startup timeout.")
+                } else {
+                    reportPlaybackFailure(PlaybackError.VIDEO_START_TIMEOUT)
+                }
             }
         }
 
@@ -113,7 +123,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             if (!isVisible || !surfaceHolder.surface.isValid ||
                 surfaceWidth <= 0 || surfaceHeight <= 0 ||
                 player != null || gifMovie != null || gifDrawable != null ||
-                gifDecodeTask != null
+                gifDecodeTask != null || videoTranscodeInProgress
             ) return
 
             fallbackVisible = true
@@ -141,12 +151,13 @@ class KosmosLiveWallpaperService : WallpaperService() {
 
         @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
         private fun startVideo(file: File) {
+            activeVideoFile = file
             val exo = runCatching {
                 val renderersFactory = DefaultRenderersFactory(this@KosmosLiveWallpaperService)
                     .setEnableDecoderFallback(true)
                 ExoPlayer.Builder(this@KosmosLiveWallpaperService, renderersFactory).build()
             }.getOrElse {
-                reportPlaybackFailure(PlaybackError.VIDEO_PLAYER_INIT_FAILED)
+                startFfmpegFallback(file, "Media3 player initialization failed: ${it.javaClass.simpleName}")
                 return
             }
 
@@ -175,8 +186,8 @@ class KosmosLiveWallpaperService : WallpaperService() {
                                 cause.message?.take(120)?.let { append(": "); append(it) }
                             }
                         }
-                        reportPlaybackFailure(failure, diagnostic)
                         stopVideoPlayer(exo)
+                        startFfmpegFallback(file, diagnostic)
                     }
                 }
 
@@ -195,12 +206,65 @@ class KosmosLiveWallpaperService : WallpaperService() {
                 exo.playWhenReady = true
             }.onFailure {
                 if (player === exo) {
-                    reportPlaybackFailure(PlaybackError.VIDEO_PREPARE_FAILED)
                     stopVideoPlayer(exo)
+                    startFfmpegFallback(file, "Media3 preparation failed: ${it.javaClass.simpleName}")
                 }
             }
             handler.removeCallbacks(videoLoadTimeout)
             handler.postDelayed(videoLoadTimeout, VIDEO_LOAD_TIMEOUT_MS)
+        }
+
+
+        /**
+         * Device decoders can reject otherwise valid H.264 streams. In that case,
+         * decode the video with FFmpeg and hand the resulting animated GIF to the
+         * existing platform GIF renderer. The temporary file lives only in cache.
+         */
+        private fun startFfmpegFallback(file: File, media3Diagnostic: String) {
+            if (videoTranscodeInProgress || !isVisible) return
+            handler.removeCallbacks(videoLoadTimeout)
+            videoTranscodeInProgress = true
+            val generation = playbackGeneration
+            val output = File(cacheDir, "kosmos-video-fallback-${System.currentTimeMillis()}.gif")
+            transcodedGif?.delete()
+            transcodedGif = output
+
+            val scaleWidth = surfaceWidth.coerceIn(360, 720)
+            val inputPath = file.absolutePath.replace("\\", "\\\\").replace("\"", "\\\"")
+            val outputPath = output.absolutePath.replace("\\", "\\\\").replace("\"", "\\\"")
+            val command = "-y -i \"$inputPath\" -t 30 -an " +
+                "-vf \"fps=10,scale='min($scaleWidth,iw)':-2:flags=lanczos\" " +
+                "-loop 0 \"$outputPath\""
+
+            runCatching {
+                FFmpegKit.executeAsync(command) { session ->
+                    handler.post {
+                        videoTranscodeInProgress = false
+                        if (generation != playbackGeneration || !isVisible) {
+                            output.delete()
+                            return@post
+                        }
+
+                        if (ReturnCode.isSuccess(session.returnCode) && output.isFile && output.length() > 0L) {
+                            startGif(output)
+                        } else {
+                            val code = session.returnCode?.value?.toString() ?: "unknown"
+                            reportPlaybackFailure(
+                                PlaybackError.VIDEO_TRANSCODE_FAILED,
+                                "FFmpeg fallback failed (exit $code). Media3: $media3Diagnostic"
+                            )
+                            output.delete()
+                        }
+                    }
+                }
+            }.onFailure { failure ->
+                videoTranscodeInProgress = false
+                output.delete()
+                reportPlaybackFailure(
+                    PlaybackError.VIDEO_TRANSCODE_FAILED,
+                    "FFmpeg could not start: ${failure.javaClass.simpleName}. Media3: $media3Diagnostic"
+                )
+            }
         }
 
         private fun startGif(file: File) {
@@ -409,6 +473,13 @@ class KosmosLiveWallpaperService : WallpaperService() {
 
         private fun stopPlayback() {
             playbackGeneration++
+            if (videoTranscodeInProgress) {
+                runCatching { FFmpegKit.cancel() }
+                videoTranscodeInProgress = false
+            }
+            transcodedGif?.let { runCatching { it.delete() } }
+            transcodedGif = null
+            activeVideoFile = null
             gifDecodeTask?.cancel(true)
             gifDecodeTask = null
             handler.removeCallbacks(gifFrame)
