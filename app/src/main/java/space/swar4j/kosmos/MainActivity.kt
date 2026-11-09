@@ -1198,6 +1198,7 @@ private fun OnlineSearchTile(
     onDownload: () -> Unit,
     onUseAsWallpaper: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val imageRequest = remember(result.previewUrl) {
         ImageRequest.Builder(context)
@@ -1243,13 +1244,15 @@ private fun OnlineSearchTile(
                     },
                     success = { SubcomposeAsyncImageContent() }
                 )
-                TextButton(
-                    onClick = onFavorite,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(2.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(if (favorite) "★" else "☆", color = if (favorite) Color(0xFFFFC928) else Color(0xFF30251A),
-                        style = MaterialTheme.typography.titleLarge)
+                Box(Modifier.align(Alignment.TopEnd)) {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = "Image options", tint = Color.White)
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(text = { Text(if (favorite) "Remove from Favorites" else "Favourite") }, onClick = { menuExpanded = false; onFavorite() })
+                        DropdownMenuItem(text = { Text("Save to library") }, enabled = !downloading, onClick = { menuExpanded = false; onDownload() })
+                        DropdownMenuItem(text = { Text("Use as wallpaper") }, enabled = !downloading, onClick = { menuExpanded = false; onUseAsWallpaper() })
+                    }
                 }
             }
             Spacer(Modifier.height(10.dp))
