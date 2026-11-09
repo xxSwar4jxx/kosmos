@@ -175,12 +175,15 @@ private fun KosmosScreen(
             if (!failure.isNullOrBlank()) {
                 val code = preferences.getString(LiveWallpaperLauncher.PLAYBACK_ERROR_CODE, "KOS-UNKNOWN")
                 val category = preferences.getString(LiveWallpaperLauncher.PLAYBACK_ERROR_CATEGORY, "Unknown")
+                val detail = preferences.getString(LiveWallpaperLauncher.PLAYBACK_ERROR_DETAIL, null)
                 preferences.edit {
                     remove(LiveWallpaperLauncher.PLAYBACK_ERROR)
                     remove(LiveWallpaperLauncher.PLAYBACK_ERROR_CODE)
                     remove(LiveWallpaperLauncher.PLAYBACK_ERROR_CATEGORY)
+                    remove(LiveWallpaperLauncher.PLAYBACK_ERROR_DETAIL)
                 }
-                snackbarHostState.showSnackbar("Wallpaper failed [$code] • $category: $failure")
+                val diagnostic = detail?.takeIf { it.isNotBlank() }?.let { " • $it" }.orEmpty()
+                snackbarHostState.showSnackbar("Wallpaper failed [$code] • $category: $failure$diagnostic")
             }
         }
     }
