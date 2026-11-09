@@ -609,6 +609,11 @@ private fun KosmosScreen(
                             OnlineSearchTile(
                                 result = result,
                                 downloading = downloadingId == "discover-${result.id}",
+                                favorite = metadata.isOnlineFavorite(result.id),
+                                onFavorite = {
+                                    metadata.setOnlineFavorite(result.id, !metadata.isOnlineFavorite(result.id))
+                                    favoriteVersion++
+                                },
                                 onDownload = {
                                     if (downloadingId == null) scope.launch {
                                         downloadingId = "discover-${result.id}"
@@ -707,6 +712,11 @@ private fun KosmosScreen(
                                 OnlineSearchTile(
                                     result = result,
                                     downloading = downloadingId == "search-${result.id}",
+                                favorite = metadata.isOnlineFavorite(result.id),
+                                onFavorite = {
+                                    metadata.setOnlineFavorite(result.id, !metadata.isOnlineFavorite(result.id))
+                                    favoriteVersion++
+                                },
                                     onDownload = {
                                         if (downloadingId == null) scope.launch {
                                             downloadingId = "search-${result.id}"
@@ -1017,6 +1027,8 @@ private fun WallpaperTile(
 private fun OnlineSearchTile(
     result: OnlineWallpaperResult,
     downloading: Boolean,
+    favorite: Boolean,
+    onFavorite: () -> Unit,
     onDownload: () -> Unit,
     onUseAsWallpaper: () -> Unit
 ) {
@@ -1035,35 +1047,45 @@ private fun OnlineSearchTile(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(9.dp)) {
-            SubcomposeAsyncImage(
-                model = imageRequest,
-                contentDescription = result.title,
-                modifier = Modifier.fillMaxWidth().aspectRatio(0.82f).clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop,
-                loading = {
-                    Column(
-                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp),
-                        verticalArrangement = Arrangement.Bottom
-                    ) {
-                        Spacer(Modifier.fillMaxWidth(0.76f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)))
-                        Spacer(Modifier.height(8.dp))
-                        Spacer(Modifier.fillMaxWidth(0.48f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)))
-                    }
-                },
-                error = {
-                    Box(
-                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Preview unavailable",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                success = { SubcomposeAsyncImageContent() }
-            )
+            Box {
+                SubcomposeAsyncImage(
+                    model = imageRequest,
+                    contentDescription = result.title,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(0.82f).clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop,
+                    loading = {
+                        Column(
+                            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp),
+                            verticalArrangement = Arrangement.Bottom
+                        ) {
+                            Spacer(Modifier.fillMaxWidth(0.76f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)))
+                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.fillMaxWidth(0.48f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)))
+                        }
+                    },
+                    error = {
+                        Box(
+                            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Preview unavailable",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    success = { SubcomposeAsyncImageContent() }
+                )
+                TextButton(
+                    onClick = onFavorite,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(2.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text("★", color = if (favorite) Color(0xFFFFC928) else Color(0xFFB8B8B8),
+                        style = MaterialTheme.typography.titleLarge)
+                }
+            }
             Spacer(Modifier.height(10.dp))
             Text(result.title, style = MaterialTheme.typography.titleSmall, maxLines = 2)
             Text(result.creator, style = MaterialTheme.typography.labelSmall,
