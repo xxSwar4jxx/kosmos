@@ -30,6 +30,12 @@ Kosmos is an Android wallpaper library for static images and animated wallpapers
 - Downloads use HTTPS only, enforce a Wikimedia host allowlist across redirects, apply byte limits and pass through the same media validation as local imports.
 - Catalogue preview and download failures do not affect the local library.
 
+## Video decoding fallback
+
+MP4 playback first uses AndroidX Media3 and the device MediaCodec decoders. If those fail to initialize or render a frame, Kosmos uses the GPL-3.0 FFmpegKit Android build to decode the video into a temporary, muted animated GIF in app cache, then renders it through the existing GIF wallpaper path. The fallback is capped at 30 seconds and 10 frames per second to limit CPU and storage use. The temporary conversion is deleted when playback stops.
+
+FFmpegKit Android is provided by the independent [ffmpegkit-maintained/ffmpeg](https://github.com/ffmpegkit-maintained/ffmpeg) project, using the pinned `dev.ffmpegkit-maintained:ffmpeg-kit-full-gpl:8.1.9` artifact. It is not affiliated with the original FFmpegKit authors. See the dependency's bundled third-party notices and upstream source for component-level licensing.
+
 ## Build
 
 Open the repository in Android Studio and sync Gradle. The project targets Android 8.0 (API 26), compiles against SDK 36 and uses Java 17.
@@ -45,6 +51,10 @@ GitHub Actions builds a debug APK on pushes and pull requests to `main`.
 - Catalogue size, download size, media dimensions and video duration are bounded.
 - Imported and downloaded files are validated before being made visible in the library.
 - Wallpaper paths are checked against the app's private wallpaper directory before use.
+
+## License
+
+Kosmos is distributed under the GNU General Public License v3.0 only. See [LICENSE](LICENSE). Third-party dependencies and media retain their respective licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Known validation limits
 
