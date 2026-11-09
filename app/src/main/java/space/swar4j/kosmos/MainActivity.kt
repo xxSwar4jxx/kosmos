@@ -262,18 +262,45 @@ private fun KosmosScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("KOSMOS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                    Text("Wallpapers in motion.", style = MaterialTheme.typography.bodyMedium,
+                    Text("ZEROTECH", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary)
+                    Text("KOSMOS", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                TextButton(onClick = { onThemeChange(!darkTheme) }) {
-                    Text(if (darkTheme) "Light mode" else "Dark mode")
-                }
+                OutlinedTextField(
+                    value = onlineQuery,
+                    onValueChange = { onlineQuery = it },
+                    modifier = Modifier.width(205.dp),
+                    singleLine = true,
+                    enabled = hasInternet && !isSearchingOnline,
+                    placeholder = { Text("Search wallpapers") },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                if (hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline) {
+                                    tab = "Search"
+                                    scope.launch {
+                                        isSearchingOnline = true
+                                        onlineResults = emptyList()
+                                        runCatching { OnlineWallpaperSearch().search(onlineQuery) }
+                                            .onSuccess { onlineResults = it }
+                                            .onFailure { snackbarHostState.showSnackbar(it.message ?: "Image search failed") }
+                                        isSearchingOnline = false
+                                    }
+                                }
+                            },
+                            enabled = hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline
+                        ) { Icon(Icons.Outlined.Search, contentDescription = "Search") }
+                    }
+                )
             }
 
-            Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Library", "Discover", "Search").forEach { destination ->
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("Home", "Library", "Discover", "Presets").forEach { destination ->
                     FilterChip(
                         selected = tab == destination,
                         onClick = { tab = destination },
