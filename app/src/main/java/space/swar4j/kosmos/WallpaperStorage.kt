@@ -160,31 +160,42 @@ class WallpaperStorage(private val context: Context) {
     suspend fun listWallpapers(): List<StoredWallpaper> = withContext(Dispatchers.IO) {
         wallpaperDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
         thumbnailDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".part") }?.forEach { it.delete() }
-        wallpaperDirectory.listFiles()
+
+        val seenContent = HashSet<String>()
+        val files = wallpaperDirectory.listFiles()
             ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS &&
                 runCatching { it.canonicalFile.parentFile == wallpaperDirectory.canonicalFile }.getOrDefault(false) }
             ?.sortedByDescending { it.lastModified() }
-            ?.mapNotNull { file ->
-                val thumbnailFile = File(thumbnailDirectory, "${file.nameWithoutExtension}.jpg")
-                val thumbnail = thumbnailFile.takeIf { it.isFile }
-                    ?: runCatching { createThumbnail(file) }.getOrNull()
-                    ?: return@mapNotNull null
-                StoredWallpaper(
-                    file = file,
-                    title = if (file.name.startsWith("preset_")) {
-                        when (file.nameWithoutExtension) {
-                            "preset_aurora" -> "Aurora"
-                            "preset_cosmos" -> "Eventide"
-                            "preset_dusk" -> "Afterglow"
-                            "preset_mono" -> "Monolith"
-                            else -> file.nameWithoutExtension
-                        }
-                    } else file.nameWithoutExtension.substringBefore("__").replace("-", " ").take(48),
-                    thumbnail = thumbnail,
-                    isAnimated = file.extension.lowercase() in setOf("gif", "mp4"),
-                    isPreset = file.name.startsWith("preset_")
-                )
-            } ?: emptyList()
+            ?.filter { file ->
+                val key = "${file.extension.lowercase()}:${sha256(file)}"
+                if (seenContent.add(key)) true else {
+                    file.delete()
+                    File(thumbnailDirectory, "${file.nameWithoutExtension}.jpg").delete()
+                    false
+                }
+            }
+
+        files?.mapNotNull { file ->
+            val thumbnailFile = File(thumbnailDirectory, "${file.nameWithoutExtension}.jpg")
+            val thumbnail = thumbnailFile.takeIf { it.isFile }
+                ?: runCatching { createThumbnail(file) }.getOrNull()
+                ?: return@mapNotNull null
+            StoredWallpaper(
+                file = file,
+                title = if (file.name.startsWith("preset_")) {
+                    when (file.nameWithoutExtension) {
+                        "preset_aurora" -> "Aurora"
+                        "preset_cosmos" -> "Eventide"
+                        "preset_dusk" -> "Afterglow"
+                        "preset_mono" -> "Monolith"
+                        else -> file.nameWithoutExtension
+                    }
+                } else file.nameWithoutExtension.substringBefore("__").replace("-", " ").take(48),
+                thumbnail = thumbnail,
+                isAnimated = file.extension.lowercase() in setOf("gif", "mp4"),
+                isPreset = file.name.startsWith("preset_")
+            )
+        } ?: emptyList()
     }
 
     private fun downloadSecure(initialUrl: String, destination: File, maxBytes: Long) {
