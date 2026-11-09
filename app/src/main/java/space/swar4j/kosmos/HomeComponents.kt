@@ -1,6 +1,7 @@
 package space.swar4j.kosmos
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -129,14 +130,15 @@ fun GhostWallpaperGrid(modifier: Modifier = Modifier) {
                 Column(Modifier.padding(10.dp)) {
                     Box(
                         Modifier.fillMaxWidth().aspectRatio(0.82f)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                     )
                     Spacer(Modifier.height(10.dp))
-                    Box(Modifier.fillMaxWidth(0.8f).height(14.dp).clip(RoundedCornerShape(6.dp)))
+                    Box(Modifier.fillMaxWidth(0.8f).height(14.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
                     Spacer(Modifier.height(7.dp))
-                    Box(Modifier.fillMaxWidth(0.5f).height(11.dp).clip(RoundedCornerShape(6.dp)))
+                    Box(Modifier.fillMaxWidth(0.5f).height(11.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
                     Spacer(Modifier.height(12.dp))
-                    Box(Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(20.dp)))
+                    Box(Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
                 }
             }
         }
