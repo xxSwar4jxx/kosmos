@@ -237,6 +237,9 @@ private fun KosmosScreen(
     var settingsSection by rememberSaveable { mutableStateOf("General") }
     val settings = remember { context.getSharedPreferences("arka_settings", android.content.Context.MODE_PRIVATE) }
     var applyPresetTo by rememberSaveable { mutableStateOf(settings.getString("apply_presets_to", "ask") ?: "ask") }
+    var blurNonExplicitSensitivePreviews by rememberSaveable {
+        mutableStateOf(settings.getBoolean("blur_non_explicit_sensitive_previews", true))
+    }
 
     val performOnlineSearch: () -> Unit = {
         if (hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline) {
@@ -405,7 +408,7 @@ private fun KosmosScreen(
                     Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("General", "About").forEach { section ->
+                        listOf("General", "Content", "About").forEach { section ->
                             FilterChip(selected = settingsSection == section, onClick = { settingsSection = section }, label = { Text(section) })
                         }
                     }
@@ -449,6 +452,39 @@ private fun KosmosScreen(
                             item {
                                 SettingsGroup(title = "Library") {
                                     Text("Images selected from your gallery are copied into Arka, so they remain available in your library and presets.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    } else if (settingsSection == "Content") {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+                            item {
+                                SettingsGroup(title = "Preview preferences") {
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("Blur non-explicit sensitive previews", style = MaterialTheme.typography.titleSmall)
+                                            Text(
+                                                "Saved preference for a future preview treatment. It does not change search results or image visibility yet.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        androidx.compose.material3.Switch(
+                                            checked = blurNonExplicitSensitivePreviews,
+                                            onCheckedChange = { enabled ->
+                                                blurNonExplicitSensitivePreviews = enabled
+                                                settings.edit { putBoolean("blur_non_explicit_sensitive_previews", enabled) }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            item {
+                                SettingsGroup(title = "Content sources") {
+                                    Text(
+                                        "Arka's current image search remains safe-for-work. This preference is stored locally only; no blur, reveal, or content-rating behavior is connected yet.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
