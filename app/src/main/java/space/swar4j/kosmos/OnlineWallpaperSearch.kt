@@ -87,57 +87,95 @@ class OnlineWallpaperSearch {
         return (danbooru + anilist).distinctBy { it.downloadUrl.substringBefore('?') }
     }
 
-    private fun searchAniListCharacters(query: String): List<AnimeCharacter> {
-        val connection = (URL("https://graphql.anilist.co").openConnection() as HttpURLConnection).apply {
-            connectTimeout = 6_000; readTimeout = 8_000; requestMethod = "POST"; doOutput = true
-            setRequestProperty("Content-Type", "application/json"); setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "ArkaAndroid/0.9.3")
-        }
-        val gql = """
-            query (${'$'}search: String) {
+    private fun searchAniListCharacters(queryText: String): List<AnimeCharacter> {
+        // AniList permits only one paginated Page data field per query, so
+        // anime media and direct character matches must be requested separately.
+        val mediaQuery = """
+            query ($search: String) {
               Page(perPage: 10) {
-                media(search: ${'$'}search, type: ANIME, isAdult: false) {
+                media(search: $search, type: ANIME, isAdult: false) {
                   title { romaji english }
-                  characters(perPage: 8, sort: ROLE) { nodes { name { full } image { large } } }
-                }
-                characters(search: ${'$'}search) {
-                  nodes { name { full } image { large } media(perPage: 5) { nodes { title { romaji english } } } }
+                  characters(perPage: 8, sort: ROLE) {
+                    nodes { name { full } image { large } }
+                  }
                 }
               }
             }
         """.trimIndent()
-        try {
-            val body = JSONObject().put("query", gql).put("variables", JSONObject().put("search", query))
-            connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) return emptyList()
-            val root = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-            val pageData = root.optJSONObject("data")?.optJSONObject("Page") ?: return emptyList()
-            val results = LinkedHashMap<String, AnimeCharacter>()
-            val media = pageData.optJSONArray("media") ?: org.json.JSONArray()
-            for (i in 0 until media.length()) {
-                val item = media.optJSONObject(i) ?: continue
-                val title = item.optJSONObject("title")
-                val series = title?.optString("romaji").orEmpty().ifBlank { title?.optString("english").orEmpty() }
-                val nodes = item.optJSONObject("characters")?.optJSONArray("nodes") ?: continue
-                for (j in 0 until nodes.length()) {
-                    val character = nodes.optJSONObject(j) ?: continue
-                    val name = character.optJSONObject("name")?.optString("full").orEmpty()
-                    val image = character.optJSONObject("image")?.optString("large").orEmpty()
-                    if (name.isNotBlank() && isSecureImageUrl(image)) results[name.lowercase()] = AnimeCharacter(name, series, image)
+        val characterQuery = """
+            query ($search: String) {
+              Page(perPage: 10) {
+                characters(search: $search) {
+                  nodes {
+                    name { full }
+                    image { large }
+                    media(perPage: 5) { nodes { title { romaji english } } }
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+
+        fun executeQuery(graphQl: String): JSONObject? {
+            val connection = (URL("https://graphql.anilist.co").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8_000
+                readTimeout = 12_000
+                requestMethod = "POST"
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "ArkaAndroid/0.9.4")
+            }
+            return try {
+                val body = JSONObject().put("query", graphQl)
+                    .put("variables", JSONObject().put("search", queryText))
+                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) null
+                else JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+            } catch (_: Exception) {
+                null
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+        val mediaRoot = executeQuery(mediaQuery)
+        val characterRoot = executeQuery(characterQuery)
+        val results = LinkedHashMap<String, AnimeCharacter>()
+
+        val media = mediaRoot?.optJSONObject("data")?.optJSONObject("Page")?.optJSONArray("media")
+            ?: org.json.JSONArray()
+        for (i in 0 until media.length()) {
+            val item = media.optJSONObject(i) ?: continue
+            val title = item.optJSONObject("title")
+            val series = title?.optString("romaji").orEmpty()
+                .ifBlank { title?.optString("english").orEmpty() }
+            val nodes = item.optJSONObject("characters")?.optJSONArray("nodes") ?: continue
+            for (j in 0 until nodes.length()) {
+                val character = nodes.optJSONObject(j) ?: continue
+                val name = character.optJSONObject("name")?.optString("full").orEmpty()
+                val image = character.optJSONObject("image")?.optString("large").orEmpty()
+                if (name.isNotBlank() && isSecureImageUrl(image)) {
+                    results[name.lowercase()] = AnimeCharacter(name, series, image)
                 }
             }
-            val direct = pageData.optJSONObject("characters")?.optJSONArray("nodes") ?: org.json.JSONArray()
-            for (i in 0 until direct.length()) {
-                val item = direct.optJSONObject(i) ?: continue
-                val name = item.optJSONObject("name")?.optString("full").orEmpty()
-                val image = item.optJSONObject("image")?.optString("large").orEmpty()
-                val mediaNodes = item.optJSONObject("media")?.optJSONArray("nodes")
-                val title = mediaNodes?.optJSONObject(0)?.optJSONObject("title")
-                val series = title?.optString("romaji").orEmpty().ifBlank { title?.optString("english").orEmpty() }
-                if (name.isNotBlank() && isSecureImageUrl(image)) results[name.lowercase()] = AnimeCharacter(name, series, image)
+        }
+
+        val direct = characterRoot?.optJSONObject("data")?.optJSONObject("Page")
+            ?.optJSONObject("characters")?.optJSONArray("nodes") ?: org.json.JSONArray()
+        for (i in 0 until direct.length()) {
+            val item = direct.optJSONObject(i) ?: continue
+            val name = item.optJSONObject("name")?.optString("full").orEmpty()
+            val image = item.optJSONObject("image")?.optString("large").orEmpty()
+            val mediaNodes = item.optJSONObject("media")?.optJSONArray("nodes")
+            val title = mediaNodes?.optJSONObject(0)?.optJSONObject("title")
+            val series = title?.optString("romaji").orEmpty()
+                .ifBlank { title?.optString("english").orEmpty() }
+            if (name.isNotBlank() && isSecureImageUrl(image)) {
+                results[name.lowercase()] = AnimeCharacter(name, series, image)
             }
-            return results.values.take(20)
-        } finally { connection.disconnect() }
+        }
+        return results.values.take(20)
     }
 
     private fun searchDanbooru(tags: String, page: Int): List<OnlineWallpaperResult> {
