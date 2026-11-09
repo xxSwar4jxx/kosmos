@@ -72,14 +72,14 @@ class OnlineWallpaperSearch {
                     }
                     val titleLower = title.lowercase()
                     val searchable = "$titleLower ${tags.joinToString(" ")}"
-                    val matchingTerms = terms.count(searchable::contains)
-                    if (matchingTerms == 0) continue
+                    val matchingTerms = terms.count { term -> searchable.contains(term) }
+                    if (matchingTerms < terms.size) continue
 
                     val phrase = cleanQuery.lowercase()
                     val titleScore = when {
                         titleLower.contains(phrase) -> 120
-                        terms.all(titleLower::contains) -> 85
-                        else -> terms.count(titleLower::contains) * 24
+                        terms.all { term -> titleLower.contains(term) } -> 85
+                        else -> terms.count { term -> titleLower.contains(term) } * 24
                     }
                     val tagScore = terms.count { term -> tags.any { it.contains(term) } } * 10
                     val fields = item.optJSONArray("fields_matched")
