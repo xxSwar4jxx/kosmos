@@ -335,13 +335,13 @@ private fun KosmosScreen(
                 Image(
                     painter = painterResource(R.drawable.arka_banner),
                     contentDescription = "Arka by ZeroTech",
-                    modifier = Modifier.weight(1f).height(58.dp),
+                    modifier = Modifier.weight(1f).height(72.dp),
                     contentScale = ContentScale.Fit
                 )
                 OutlinedTextField(
                     value = onlineQuery,
                     onValueChange = { onlineQuery = it },
-                    modifier = Modifier.width(148.dp).height(56.dp),
+                    modifier = Modifier.width(140.dp).height(56.dp),
                     singleLine = true,
                     enabled = hasInternet && !isSearchingOnline,
                     placeholder = { Text("SEARCH") },
@@ -487,7 +487,7 @@ private fun KosmosScreen(
                     EmptyLibrary(
                         isImporting = isImporting,
                         isFiltered = wallpapers.isNotEmpty(),
-                        onImport = { importLauncher.launch(SUPPORTED_MIME_TYPES) },
+                        onImport = { galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                         modifier = Modifier.weight(1f)
                     )
                 } else {
@@ -538,7 +538,7 @@ private fun KosmosScreen(
                     }
                 }
                 Button(
-                    onClick = { importLauncher.launch(SUPPORTED_MIME_TYPES) },
+                    onClick = { galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                     enabled = !isImporting,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).height(52.dp),
                     shape = RoundedCornerShape(16.dp)
@@ -642,7 +642,7 @@ private fun KosmosScreen(
                     }
                 }
             } else if (tab == "Presets") {
-                val userPresets = wallpapers.filter { it.isPreset || metadata.isPreset(it.file.name) }
+                val userPresets = wallpapers.filter { !it.isPreset && metadata.isPreset(it.file.name) }
                 if (userPresets.isEmpty()) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("No Presets are currently saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -776,7 +776,7 @@ private fun KosmosScreen(
                     Text("Import a wallpaper first.")
                 } else {
                     LazyColumn(Modifier.height(280.dp)) {
-                        items(wallpapers.filterNot { metadata.isPreset(it.file.name) }, key = { it.file.name }) { wallpaper ->
+                        items(wallpapers.filterNot { it.isPreset || metadata.isPreset(it.file.name) }, key = { it.file.name }) { wallpaper ->
                             TextButton(
                                 onClick = {
                                     metadata.setPreset(wallpaper.file.name, true)
@@ -1082,7 +1082,7 @@ private fun OnlineSearchTile(
                     modifier = Modifier.align(Alignment.TopEnd).padding(2.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    Text("★", color = if (favorite) Color(0xFFFFC928) else Color(0xFFB8B8B8),
+                    Text(if (favorite) "★" else "☆", color = if (favorite) Color(0xFFFFC928) else Color(0xFF30251A),
                         style = MaterialTheme.typography.titleLarge)
                 }
             }
