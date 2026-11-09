@@ -12,8 +12,8 @@ android {
         applicationId = "space.swar4j.kosmos"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
     }
 
     buildFeatures {
@@ -53,6 +53,7 @@ dependencies {
 
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("io.github.anilbeesetti:nextlib-media3ext:1.11.1-0.16.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
