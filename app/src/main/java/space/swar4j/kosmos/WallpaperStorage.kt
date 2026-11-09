@@ -123,7 +123,7 @@ class WallpaperStorage(private val context: Context) {
         }
     }
 
-    suspend fun downloadSearchResult(result: OnlineWallpaperResult): StoredWallpaper = withContext(Dispatchers.IO) {
+    suspend fun downloadSearchResult(result: OnlineWallpaperResult, allowDuplicate: Boolean = true): StoredWallpaper = withContext(Dispatchers.IO) {
         val extension = result.fileExtension.lowercase().let { if (it == "jpeg") "jpg" else it }
         if (extension !in setOf("jpg", "png", "webp", "gif")) throw IOException("Unsupported image format")
         val title = sanitizeTitle(result.title)
@@ -132,9 +132,11 @@ class WallpaperStorage(private val context: Context) {
         try {
             downloadSecure(result.downloadUrl, temporary, MAX_IMAGE_BYTES)
             validateMedia(temporary, extension)
-            findDuplicate(temporary)?.let { existing ->
-                temporary.delete()
-                return@withContext existing
+            if (allowDuplicate) {
+                findDuplicate(temporary)?.let { existing ->
+                    temporary.delete()
+                    return@withContext existing
+                }
             }
             if (!temporary.renameTo(destination)) throw IOException("Couldn't save the image")
             val thumbnail = createThumbnail(destination)
