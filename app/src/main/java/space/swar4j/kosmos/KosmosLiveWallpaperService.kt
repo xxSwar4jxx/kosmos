@@ -190,6 +190,10 @@ class KosmosLiveWallpaperService : WallpaperService() {
             if (!isVisible || !surfaceHolder.surface.isValid) return
             player?.let { exo ->
                 runCatching { exo.playWhenReady = true; exo.play() }
+                if (fallbackVisible) {
+                    handler.removeCallbacks(videoLoadTimeout)
+                    handler.postDelayed(videoLoadTimeout, VIDEO_LOAD_TIMEOUT_MS)
+                }
                 return
             }
             gifDrawable?.let { drawable ->
