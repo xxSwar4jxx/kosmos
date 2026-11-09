@@ -423,7 +423,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             gifMovie = null
 
             player?.let { exo ->
-                runCatching { exo.clearVideoSurface() }
+                runCatching { exo.clearVideoSurfaceHolder(surfaceHolder) }
                 runCatching { exo.stop() }
                 runCatching { exo.release() }
             }
