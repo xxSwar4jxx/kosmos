@@ -160,6 +160,10 @@ class WallpaperStorage(private val context: Context) {
         }
         val title = sanitizeTitle(requestedTitle)
         if (title.isBlank()) throw IOException("Enter a valid wallpaper name")
+        if (title.equals(safeFile.nameWithoutExtension, ignoreCase = true)) {
+            val thumbnail = File(thumbnailDirectory, "${safeFile.nameWithoutExtension}.jpg")
+            return@withContext StoredWallpaper(safeFile, title, thumbnail, safeFile.extension.lowercase() in setOf("gif", "mp4"))
+        }
         val destination = uniqueDestination(title, safeFile.extension)
         if (!safeFile.renameTo(destination)) throw IOException("Couldn't rename this wallpaper")
         val oldThumbnail = File(thumbnailDirectory, "${safeFile.nameWithoutExtension}.jpg")
