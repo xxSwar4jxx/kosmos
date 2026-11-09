@@ -39,47 +39,21 @@ class OnlineWallpaperSearch {
             if (terms.isEmpty()) return@withContext emptyList()
 
             val safePage = page.coerceAtLeast(1)
-            suspend fun fetchFor(searchText: String): Pair<Result<List<OnlineWallpaperResult>>, Result<List<OnlineWallpaperResult>>> =
-                coroutineScope {
-                    val searchTerms = searchText.lowercase()
-                        .split(Regex("[^\\p{L}\\p{N}]+"))
-                        .filter { it.length > 1 }
-                        .distinct()
-                    val openverseCall = async { runCatching { searchOpenverse(searchText, searchTerms, safePage) } }
-                    val commonsCall = async { runCatching { searchCommons(searchText, searchTerms, safePage) } }
-                    openverseCall.await() to commonsCall.await()
-                }
-
-            val (openverse, commons) = fetchFor(clean)
-            var combined = openverse.getOrDefault(emptyList()) + commons.getOrDefault(emptyList())
-
-            // Anime illustrations come from a separate SFW-only image source;
-            // Openverse and Wikimedia remain the general-purpose providers.
-            if (terms.any { it in setOf("anime", "waifu", "manga") }) {
-                combined += runCatching { searchAnimeImages(safePage) }.getOrDefault(emptyList())
+            val animeResults = coroutineScope {
+                async { runCatching { searchAnimeProviders(clean, safePage) }.getOrDefault(emptyList()) }
+            }.await()
+            val generalProviders = coroutineScope {
+                val openverseCall = async { runCatching { searchOpenverse(clean, terms, safePage) }.getOrDefault(emptyList()) }
+                val commonsCall = async { runCatching { searchCommons(clean, terms, safePage) }.getOrDefault(emptyList()) }
+                openverseCall.await() to commonsCall.await()
             }
+            // Anime results take priority. General providers are only shown when
+            // AniList/Danbooru cannot find a relevant anime illustration.
+            val selected = if (animeResults.isNotEmpty()) animeResults
+                else generalProviders.first + generalProviders.second
 
-            // Retry low-yield searches with two broader phrases. Keep provider calls
-            // concurrent, and only pay this cost when the original query is sparse.
-            if (combined.size < 8 && safePage == 1) {
-                val fallbackQueries = listOf(
-                    "$clean wallpaper",
-                    terms.take(2).joinToString(" ") + " wallpaper"
-                ).map { it.trim() }.distinct().filter { it.isNotBlank() && !it.equals(clean, true) }
-                val expanded = coroutineScope {
-                    fallbackQueries.map { phrase -> async { fetchFor(phrase) } }.awaitAll()
-                }
-                expanded.forEach { pair ->
-                    combined += pair.first.getOrDefault(emptyList())
-                    combined += pair.second.getOrDefault(emptyList())
-                }
-            }
-
-            if (openverse.isFailure && commons.isFailure && combined.isEmpty()) {
-                throw IOException("Image search providers are unavailable. Please try again.")
-            }
-
-            combined.distinctBy { it.downloadUrl.substringBefore('?') }
+            if (selected.isEmpty()) throw IOException("Image search providers are unavailable. Please try again.")
+            selected.distinctBy { it.downloadUrl.substringBefore('?') }
                 .sortedByDescending { result ->
                     val titleScore = relevanceScore(result.title, terms)
                     val exactPhraseBonus = if (result.title.contains(clean, ignoreCase = true)) 4 else 0
@@ -88,35 +62,137 @@ class OnlineWallpaperSearch {
                 .take(40)
         }
 
-    private fun searchAnimeImages(page: Int): List<OnlineWallpaperResult> {
-        val endpoint = URL(
-            "https://api.waifu.im/search/?included_tags=waifu&is_nsfw=false&many=true"
-        )
-        val root = requestJson(endpoint, "https://www.waifu.im/")
-        val images = root.optJSONArray("images") ?: return emptyList()
-        val start = ((page - 1) * 20).coerceAtMost(images.length())
+    private data class AnimeCharacter(val name: String, val series: String, val image: String)
+
+    private fun searchAnimeProviders(query: String, page: Int): List<OnlineWallpaperResult> {
+        val characters = searchAniListCharacters(query)
+        val explicitCosplaySearch = query.contains("cosplay", ignoreCase = true)
+        val tagQueries = buildList {
+            add(query.toDanbooruTagQuery(explicitCosplaySearch))
+            characters.forEach { character ->
+                add(character.name.toDanbooruTagQuery(explicitCosplaySearch))
+                if (character.series.isNotBlank()) add((character.name + " " + character.series).toDanbooruTagQuery(explicitCosplaySearch))
+            }
+        }.filter { it.isNotBlank() }.distinct().take(8)
+
+        val danbooru = tagQueries.flatMap { tags -> searchDanbooru(tags, page) }
+            .distinctBy { it.id }.take(32)
+        val anilist = characters.mapNotNull { character ->
+            if (!isSecureImageUrl(character.image)) return@mapNotNull null
+            OnlineWallpaperResult(
+                id = "anilist-${character.name.hashCode()}",
+                title = if (character.series.isBlank()) character.name else "${character.name} • ${character.series}",
+                previewUrl = character.image,
+                downloadUrl = character.image,
+                fileExtension = "jpg",
+                creator = "AniList character artwork",
+                license = "See original AniList source"
+            )
+        }
+        return (danbooru + anilist).distinctBy { it.downloadUrl.substringBefore('?') }
+    }
+
+    private fun searchAniListCharacters(query: String): List<AnimeCharacter> {
+        val connection = (URL("https://graphql.anilist.co").openConnection() as HttpURLConnection).apply {
+            connectTimeout = 6_000
+            readTimeout = 8_000
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "ArkaAndroid/0.9.3")
+        }
+        val gql = """
+            query ($search: String) {
+              Page(perPage: 10) {
+                media(search: $search, type: ANIME, isAdult: false) {
+                  title { romaji english }
+                  characters(perPage: 8, sort: ROLE) { nodes { name { full } image { large } } }
+                }
+                characters(search: $search) {
+                  nodes { name { full } image { large } media(perPage: 5) { nodes { title { romaji english } } } }
+                }
+              }
+            }
+        """.trimIndent()
+        try {
+            val body = JSONObject().put("query", gql).put("variables", JSONObject().put("search", query))
+            connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) return emptyList()
+            val root = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+            val pageData = root.optJSONObject("data")?.optJSONObject("Page") ?: return emptyList()
+            val results = LinkedHashMap<String, AnimeCharacter>()
+            val media = pageData.optJSONArray("media") ?: org.json.JSONArray()
+            for (i in 0 until media.length()) {
+                val item = media.optJSONObject(i) ?: continue
+                val title = item.optJSONObject("title")
+                val series = title?.optString("romaji").orEmpty().ifBlank { title?.optString("english").orEmpty() }
+                val nodes = item.optJSONObject("characters")?.optJSONArray("nodes") ?: continue
+                for (j in 0 until nodes.length()) {
+                    val character = nodes.optJSONObject(j) ?: continue
+                    val name = character.optJSONObject("name")?.optString("full").orEmpty()
+                    val image = character.optJSONObject("image")?.optString("large").orEmpty()
+                    if (name.isNotBlank() && isSecureImageUrl(image)) results[name.lowercase()] = AnimeCharacter(name, series, image)
+                }
+            }
+            val direct = pageData.optJSONObject("characters")?.optJSONArray("nodes") ?: org.json.JSONArray()
+            for (i in 0 until direct.length()) {
+                val item = direct.optJSONObject(i) ?: continue
+                val name = item.optJSONObject("name")?.optString("full").orEmpty()
+                val image = item.optJSONObject("image")?.optString("large").orEmpty()
+                val mediaNodes = item.optJSONObject("media")?.optJSONArray("nodes")
+                val title = mediaNodes?.optJSONObject(0)?.optJSONObject("title")
+                val series = title?.optString("romaji").orEmpty().ifBlank { title?.optString("english").orEmpty() }
+                if (name.isNotBlank() && isSecureImageUrl(image)) results[name.lowercase()] = AnimeCharacter(name, series, image)
+            }
+            return results.values.take(20)
+        } finally { connection.disconnect() }
+    }
+
+    private fun searchDanbooru(tags: String, page: Int): List<OnlineWallpaperResult> {
+        val endpoint = URL("https://danbooru.donmai.us/posts.json?limit=20&page=$page&tags=" +
+            URLEncoder.encode(tags, Charsets.UTF_8.name()))
+        val root = requestJsonArray(endpoint, "https://danbooru.donmai.us/")
         return buildList {
-            for (index in start until minOf(start + 20, images.length())) {
-                val item = images.optJSONObject(index) ?: continue
-                val imageUrl = item.optString("url")
-                if (!isSecureImageUrl(imageUrl)) continue
-                val extension = imageUrl.substringBefore('?').substringAfterLast('.', "").lowercase()
-                    .let { if (it == "jpeg") "jpg" else it }
-                if (extension !in SUPPORTED_IMAGE_TYPES) continue
-                val id = item.optString("image_id").ifBlank { "anime-$index" }
-                add(
-                    OnlineWallpaperResult(
-                        id = "waifu-im-$id",
-                        title = "Anime illustration $id",
-                        previewUrl = imageUrl,
-                        downloadUrl = imageUrl,
-                        fileExtension = extension,
-                        creator = "Waifu.im community",
-                        license = "See original source"
-                    )
-                )
+            for (index in 0 until root.length()) {
+                val item = root.optJSONObject(index) ?: continue
+                // Arka deliberately keeps explicit material out of the teen-facing app.
+                if (item.optString("rating") != "s") continue
+                val ext = item.optString("file_ext").lowercase().let { if (it == "jpeg") "jpg" else it }
+                if (ext !in SUPPORTED_IMAGE_TYPES) continue
+                val full = item.optString("large_file_url").ifBlank { item.optString("file_url") }
+                val preview = item.optString("preview_file_url").ifBlank { full }
+                if (!isSecureImageUrl(full) || !isSecureImageUrl(preview)) continue
+                val id = item.optLong("id")
+                val title = item.optString("tag_string").split(" ").filter { it.isNotBlank() }
+                    .take(5).joinToString(" ") { it.replace('_', ' ') }.ifBlank { "Anime illustration $id" }
+                add(OnlineWallpaperResult("danbooru-$id", title.take(120), preview, full, ext,
+                    "Danbooru contributor", "See original artist/source"))
             }
         }
+    }
+
+    private fun requestJsonArray(url: URL, referer: String): org.json.JSONArray {
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 6_000
+            readTimeout = 8_000
+            instanceFollowRedirects = true
+            requestMethod = "GET"
+            setRequestProperty("User-Agent", "ArkaAndroid/0.9.3 (wallpaper search; https://github.com/xxSwar4jxx/kosmos)")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Referer", referer)
+        }
+        try {
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) throw IOException("Danbooru returned HTTP ${connection.responseCode}")
+            return org.json.JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+        } finally { connection.disconnect() }
+    }
+
+    private fun String.toDanbooruTagQuery(allowCosplay: Boolean): String {
+        val normalized = lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "_").trim('_')
+        if (normalized.isBlank()) return ""
+        val exclusions = if (allowCosplay) "" else " -cosplay -photo -photorealistic -realistic -3d -irl"
+        return "${normalized.replace("_", " ")} rating:s$exclusions"
     }
 
     private fun searchOpenverse(
