@@ -695,7 +695,7 @@ private fun KosmosScreen(
         )
     }
 
-    selectedWallpaper?.let { wallpaper ->
+    if (!showApplyDialog) selectedWallpaper?.let { wallpaper ->
         Dialog(onDismissRequest = { selectedWallpaper = null; showApplyDialog = false; deleteAfterApply = false }) {
             Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
                 Column(Modifier.padding(16.dp)) {
