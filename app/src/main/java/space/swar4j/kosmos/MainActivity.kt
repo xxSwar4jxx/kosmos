@@ -490,52 +490,66 @@ private fun KosmosScreen(
                 ) {
                     Column {
                         Text("Discover", style = MaterialTheme.typography.titleLarge)
-                        Text("A small, curated collection", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        Text("Fresh wallpapers selected for you", color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall)
                     }
                     TextButton(
                         onClick = {
-                            scope.launch {
-                                isLoadingCatalogue = true
-                                catalogItems = catalogue.load(forceRefresh = true)
-                                isLoadingCatalogue = false
+                            if (hasInternet && !isLoadingCatalogue) {
+                                discoverIndex = (discoverIndex + 1) % discoverQueries.size
+                                scope.launch {
+                                    isLoadingCatalogue = true
+                                    discoverResults = emptyList()
+                                    runCatching { OnlineWallpaperSearch().search(discoverQueries[discoverIndex]) }
+                                        .onSuccess { discoverResults = it }
+                                        .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't refresh Discover") }
+                                    isLoadingCatalogue = false
+                                }
                             }
                         },
-                        enabled = !isLoadingCatalogue
+                        enabled = hasInternet && !isLoadingCatalogue
                     ) { Text("Refresh") }
                 }
                 Spacer(Modifier.height(8.dp))
-                if (isLoadingCatalogue && catalogItems.isEmpty()) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                when {
+                    !hasInternet -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("Connect to the internet to discover wallpapers", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                } else if (catalogItems.isEmpty()) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("Catalogue unavailable. Your saved wallpapers still work offline.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    isLoadingCatalogue && discoverResults.isEmpty() -> GhostWallpaperGrid(Modifier.weight(1f))
+                    discoverResults.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("No images available right now. Try Refresh.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                } else {
-                    LazyColumn(
+                    else -> LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 148.dp),
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(bottom = 20.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(catalogItems, key = { it.id }) { item ->
-                            CatalogueTile(
-                                item = item,
-                                downloading = downloadingId == item.id,
+                        items(discoverResults, key = { it.id }) { result ->
+                            OnlineSearchTile(
+                                result = result,
+                                downloading = downloadingId == "discover-${result.id}",
                                 onDownload = {
-                                    if (downloadingId != null) return@CatalogueTile
-                                    scope.launch {
-                                        downloadingId = item.id
-                                        runCatching { storage.downloadCatalogueItem(item) }
-                                            .onSuccess {
+                                    if (downloadingId == null) scope.launch {
+                                        downloadingId = "discover-${result.id}"
+                                        runCatching { storage.downloadSearchResult(result) }
+                                            .onSuccess { refreshLibrary(); snackbarHostState.showSnackbar("Saved to your library") }
+                                            .onFailure { snackbarHostState.showSnackbar(it.message ?: "Download failed") }
+                                        downloadingId = null
+                                    }
+                                },
+                                onUseAsWallpaper = {
+                                    if (downloadingId == null) scope.launch {
+                                        downloadingId = "discover-${result.id}"
+                                        runCatching { storage.downloadSearchResult(result) }
+                                            .onSuccess { downloaded ->
                                                 refreshLibrary()
-                                                snackbarHostState.showSnackbar("Saved to your library")
+                                                deleteAfterApply = true
+                                                selectedWallpaper = downloaded
+                                                showApplyDialog = true
                                             }
-                                            .onFailure {
-                                                snackbarHostState.showSnackbar(it.message ?: "Download failed")
-                                            }
+                                            .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't download wallpaper") }
                                         downloadingId = null
                                     }
                                 }
@@ -543,77 +557,66 @@ private fun KosmosScreen(
                         }
                     }
                 }
-            } else {
-                Text("Search the web", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "Find openly licensed images by keyword from Openverse.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = onlineQuery,
-                    onValueChange = { onlineQuery = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    enabled = hasInternet && !isSearchingOnline,
-                    placeholder = { Text("Try: anime scenery, sakura, cyberpunk") }
-                )
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        if (!hasInternet) return@Button
-                        scope.launch {
-                            isSearchingOnline = true
-                            onlineResults = emptyList()
-                            runCatching { OnlineWallpaperSearch().search(onlineQuery) }
-                                .onSuccess { onlineResults = it }
-                                .onFailure { snackbarHostState.showSnackbar(it.message ?: "Image search failed") }
-                            isSearchingOnline = false
-                        }
-                    },
-                    enabled = hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (isSearchingOnline) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    else Text("Search images")
-                }
-                Spacer(Modifier.height(8.dp))
-                if (!hasInternet) {
+            } else if (tab == "Presets") {
+                val userPresets = wallpapers.filter { metadata.isPreset(it.file.name) }
+                if (userPresets.isEmpty()) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "No Internet Connection",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                "connect to the internet to search for wallpapers",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                } else if (isSearchingOnline) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (onlineResults.isEmpty()) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text(
-                            if (onlineQuery.isBlank()) "Search for something you like."
-                            else "No results yet. Try a different keyword.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("No Presets are currently saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "${onlineResults.size} results",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 148.dp),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(userPresets, key = { it.file.name }) { wallpaper ->
+                            PresetTile(
+                                wallpaper = wallpaper,
+                                onApply = {
+                                    if (wallpaper.isAnimated) {
+                                        runCatching { liveLauncher.launch(wallpaper.file) }
+                                            .onFailure { scope.launch { snackbarHostState.showSnackbar(it.message ?: "Couldn't open live wallpaper") } }
+                                    } else {
+                                        applyWallpaper(scope, applier, wallpaper, WallpaperDestination.BOTH, snackbarHostState) { }
+                                    }
+                                },
+                                onRemove = {
+                                    metadata.setPreset(wallpaper.file.name, false)
+                                    favoriteVersion++
+                                }
+                            )
+                        }
+                    }
+                }
+                Button(
+                    onClick = { showAddPresetDialog = true },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add Preset")
+                }
+            } else {
+                Text("Search results", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(8.dp))
+                when {
+                    !hasInternet -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("No Internet Connection", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("connect to the internet to search for wallpapers",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    isSearchingOnline && onlineResults.isEmpty() -> GhostWallpaperGrid(Modifier.weight(1f))
+                    onlineResults.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("Search for something from the bar above.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    else -> {
+                        Text("${onlineResults.size} results for “${onlineQuery}”",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 148.dp),
                             modifier = Modifier.weight(1f),
@@ -622,48 +625,65 @@ private fun KosmosScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(onlineResults, key = { it.id }) { result ->
-                            OnlineSearchTile(
-                                result = result,
-                                downloading = downloadingId == "search-${result.id}",
-                                onDownload = {
-                                    if (downloadingId != null) return@OnlineSearchTile
-                                    scope.launch {
-                                        downloadingId = "search-${result.id}"
-                                        runCatching { storage.downloadSearchResult(result) }
-                                            .onSuccess {
-                                                refreshLibrary()
-                                                snackbarHostState.showSnackbar("Saved to your library")
-                                            }
-                                            .onFailure {
-                                                snackbarHostState.showSnackbar(it.message ?: "Download failed")
-                                            }
-                                        downloadingId = null
+                                OnlineSearchTile(
+                                    result = result,
+                                    downloading = downloadingId == "search-${result.id}",
+                                    onDownload = {
+                                        if (downloadingId == null) scope.launch {
+                                            downloadingId = "search-${result.id}"
+                                            runCatching { storage.downloadSearchResult(result) }
+                                                .onSuccess { refreshLibrary(); snackbarHostState.showSnackbar("Saved to your library") }
+                                                .onFailure { snackbarHostState.showSnackbar(it.message ?: "Download failed") }
+                                            downloadingId = null
+                                        }
+                                    },
+                                    onUseAsWallpaper = {
+                                        if (downloadingId == null) scope.launch {
+                                            downloadingId = "search-${result.id}"
+                                            runCatching { storage.downloadSearchResult(result) }
+                                                .onSuccess { downloaded ->
+                                                    refreshLibrary()
+                                                    deleteAfterApply = true
+                                                    selectedWallpaper = downloaded
+                                                    showApplyDialog = true
+                                                }
+                                                .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't download wallpaper") }
+                                            downloadingId = null
+                                        }
                                     }
-                                },
-                                onUseAsWallpaper = {
-                                    if (downloadingId != null) return@OnlineSearchTile
-                                    scope.launch {
-                                        downloadingId = "search-${result.id}"
-                                        runCatching { storage.downloadSearchResult(result) }
-                                            .onSuccess { downloaded ->
-                                                refreshLibrary()
-                                                deleteAfterApply = true
-                                                selectedWallpaper = if (downloaded.isAnimated) downloaded.copy(isAnimated = false) else downloaded
-                                                showApplyDialog = true
-                                            }
-                                            .onFailure {
-                                                snackbarHostState.showSnackbar(it.message ?: "Couldn't download wallpaper")
-                                            }
-                                        downloadingId = null
-                                    }
-                                }
-                            )
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showAddPresetDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddPresetDialog = false },
+            title = { Text("Add a preset") },
+            text = {
+                if (wallpapers.isEmpty()) {
+                    Text("Import a wallpaper first.")
+                } else {
+                    LazyColumn(Modifier.height(280.dp)) {
+                        items(wallpapers.filterNot { metadata.isPreset(it.file.name) }, key = { it.file.name }) { wallpaper ->
+                            TextButton(
+                                onClick = {
+                                    metadata.setPreset(wallpaper.file.name, true)
+                                    favoriteVersion++
+                                    showAddPresetDialog = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(wallpaper.title, maxLines = 1) }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAddPresetDialog = false }) { Text("Done") } }
+        )
     }
 
     selectedWallpaper?.let { wallpaper ->
