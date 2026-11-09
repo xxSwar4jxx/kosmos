@@ -72,6 +72,7 @@ import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -488,6 +489,28 @@ private fun KosmosScreen(
                                 onFavorite = {
                                     metadata.setFavorite(wallpaper.file.name, !metadata.isFavorite(wallpaper.file.name))
                                     favoriteVersion++
+                                },
+                                onApply = { selectedWallpaper = wallpaper; showApplyDialog = true },
+                                onSavePreset = {
+                                    metadata.setPreset(wallpaper.file.name, true)
+                                    favoriteVersion++
+                                    scope.launch { snackbarHostState.showSnackbar("Added to Presets") }
+                                },
+                                onRename = { newTitle ->
+                                    scope.launch {
+                                        runCatching { storage.renameWallpaper(wallpaper.file, newTitle) }
+                                            .onSuccess { refreshLibrary(); snackbarHostState.showSnackbar("Wallpaper renamed") }
+                                            .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't rename wallpaper") }
+                                    }
+                                },
+                                onRemove = {
+                                    scope.launch {
+                                        runCatching {
+                                            storage.deleteWallpaper(wallpaper.file)
+                                            metadata.remove(wallpaper.file.name)
+                                        }.onSuccess { refreshLibrary(); snackbarHostState.showSnackbar("Wallpaper removed") }
+                                            .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't remove wallpaper") }
+                                    }
                                 }
                             )
                         }
@@ -849,10 +872,18 @@ private fun WallpaperTile(
     wallpaper: StoredWallpaper,
     favorite: Boolean,
     onClick: () -> Unit,
-    onFavorite: () -> Unit
+    onFavorite: () -> Unit,
+    onApply: () -> Unit,
+    onSavePreset: () -> Unit,
+    onRename: (String) -> Unit,
+    onRemove: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showRename by remember { mutableStateOf(false) }
+    var renameText by remember(wallpaper.file.name) { mutableStateOf(wallpaper.title) }
+
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -861,18 +892,40 @@ private fun WallpaperTile(
                 AsyncImage(
                     model = wallpaper.thumbnail,
                     contentDescription = wallpaper.title,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(0.78f),
+                    modifier = Modifier.fillMaxWidth().aspectRatio(0.78f).clickable(onClick = onClick),
                     contentScale = ContentScale.Crop
                 )
-                TextButton(onClick = onFavorite, modifier = Modifier.align(Alignment.TopEnd)) {
-                    Text(if (favorite) "★" else "☆")
+                TextButton(onClick = onFavorite, modifier = Modifier.align(Alignment.TopStart)) {
+                    Text(
+                        if (favorite) "★" else "☆",
+                        color = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                Text(wallpaper.title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(wallpaper.title, modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Outlined.MoreVert, contentDescription = "Wallpaper options")
+                        }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            DropdownMenuItem(text = { Text("Apply") }, onClick = { menuExpanded = false; onApply() })
+                            DropdownMenuItem(text = { Text("Rename") }, enabled = !wallpaper.isPreset,
+                                onClick = { menuExpanded = false; showRename = true })
+                            DropdownMenuItem(text = { Text("Save to Presets") }, onClick = { menuExpanded = false; onSavePreset() })
+                            DropdownMenuItem(text = { Text(if (favorite) "Remove from Favorites" else "Favourite") },
+                                onClick = { menuExpanded = false; onFavorite() })
+                            if (!wallpaper.isPreset) {
+                                DropdownMenuItem(text = { Text("Remove") }, onClick = { menuExpanded = false; onRemove() })
+                            }
+                        }
+                    }
+                }
                 Text(
                     when {
-                        wallpaper.isPreset -> "Preset"
+                        wallpaper.isPreset -> "Preinstalled"
                         wallpaper.isAnimated -> "Animated"
                         else -> "Photo"
                     },
@@ -881,6 +934,27 @@ private fun WallpaperTile(
                 )
             }
         }
+    }
+
+    if (showRename) {
+        AlertDialog(
+            onDismissRequest = { showRename = false },
+            title = { Text("Rename wallpaper") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    label = { Text("Wallpaper name") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showRename = false; onRename(renameText) }, enabled = renameText.isNotBlank()) {
+                    Text("Save")
+                }
+            },
+            dismissButton = { TextButton(onClick = { showRename = false }) { Text("Cancel") } }
+        )
     }
 }
 
