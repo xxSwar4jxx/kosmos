@@ -215,6 +215,10 @@ class WallpaperStorage(private val context: Context) {
                         "preset_cosmos" -> "Eventide"
                         "preset_dusk" -> "Afterglow"
                         "preset_mono" -> "Monolith"
+                        "preset_solar" -> "Solar Flare"
+                        "preset_violet" -> "Violet Horizon"
+                        "preset_ocean" -> "Deep Current"
+                        "preset_ember" -> "Ember"
                         else -> file.nameWithoutExtension
                     }
                 } else file.nameWithoutExtension.substringBefore("__").replace("-", " ").take(48),
@@ -518,6 +522,10 @@ class WallpaperStorage(private val context: Context) {
                 "preset_cosmos" -> "Eventide"
                 "preset_dusk" -> "Afterglow"
                 "preset_mono" -> "Monolith"
+                "preset_solar" -> "Solar Flare"
+                "preset_violet" -> "Violet Horizon"
+                "preset_ocean" -> "Deep Current"
+                "preset_ember" -> "Ember"
                 else -> duplicate.nameWithoutExtension
             }
         } else duplicate.nameWithoutExtension.substringBefore("__").replace("-", " ").take(48)
