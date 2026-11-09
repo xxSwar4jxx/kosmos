@@ -237,8 +237,8 @@ class WallpaperStorage(private val context: Context) {
                 readTimeout = READ_TIMEOUT_MS
                 instanceFollowRedirects = false
                 requestMethod = "GET"
-                setRequestProperty("User-Agent", "KosmosAndroid/0.5 (wallpaper downloader; https://github.com/xxSwar4jxx/kosmos)")
-                setRequestProperty("Api-User-Agent", "KosmosAndroid/0.5 (wallpaper downloader; https://github.com/xxSwar4jxx/kosmos)")
+                setRequestProperty("User-Agent", "ArkaAndroid/0.8 (wallpaper downloader; https://github.com/xxSwar4jxx/kosmos)")
+                setRequestProperty("Api-User-Agent", "ArkaAndroid/0.8 (wallpaper downloader; https://github.com/xxSwar4jxx/kosmos)")
                 setRequestProperty("Accept", "image/jpeg,image/png,image/webp,image/gif,video/mp4")
             }
             try {
@@ -256,7 +256,7 @@ class WallpaperStorage(private val context: Context) {
                 if (status != HttpURLConnection.HTTP_OK) throw IOException("Download failed (HTTP $status)")
                 if (current.host.lowercase() !in DOWNLOAD_HOSTS) throw IOException("Untrusted download host")
                 val contentLength = connection.contentLengthLong
-                if (contentLength > maxBytes) throw IOException("This download exceeds Kosmos' size limit")
+                if (contentLength > maxBytes) throw IOException("This download exceeds Arka's size limit")
                 connection.inputStream.use { input ->
                     destination.outputStream().buffered().use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -265,7 +265,7 @@ class WallpaperStorage(private val context: Context) {
                             val count = input.read(buffer)
                             if (count < 0) break
                             total += count
-                            if (total > maxBytes) throw IOException("This download exceeds Kosmos' size limit")
+                            if (total > maxBytes) throw IOException("This download exceeds Arka's size limit")
                             output.write(buffer, 0, count)
                         }
                     }
