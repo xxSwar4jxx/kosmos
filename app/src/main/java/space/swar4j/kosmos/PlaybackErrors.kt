@@ -25,6 +25,7 @@ enum class PlaybackError(
     VIDEO_PREPARE_FAILED("KOS-VIDEO-002", "Playback", "The video could not be prepared."),
     VIDEO_PLAYBACK_FAILED("KOS-VIDEO-003", "Playback", "The video could not be played."),
     VIDEO_FORMAT_UNSUPPORTED("KOS-VIDEO-005", "Format", "This video codec or profile is not supported by this device."),
+    VIDEO_TRANSCODE_FAILED("KOS-VIDEO-006", "Decoding", "The software video decoder could not convert this video for playback."),
     VIDEO_START_TIMEOUT("KOS-VIDEO-004", "Timeout", "The video did not start in time."),
     GIF_DECODE_FAILED("KOS-GIF-001", "Decoding", "The GIF could not be decoded."),
     GIF_UNSUPPORTED("KOS-GIF-002", "Format", "This GIF is not animated or is unsupported on this Android version."),
