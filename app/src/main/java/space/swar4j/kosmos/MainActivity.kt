@@ -16,6 +16,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -73,6 +75,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -318,10 +321,10 @@ private fun KosmosScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color.Transparent
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp)
+            modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF100B1B), Color(0xFF21101D), Color(0xFF39200F), Color(0xFF090A0D)))).padding(padding).padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(18.dp))
             Row(
@@ -338,7 +341,7 @@ private fun KosmosScreen(
                 OutlinedTextField(
                     value = onlineQuery,
                     onValueChange = { onlineQuery = it },
-                    modifier = Modifier.width(148.dp).height(44.dp),
+                    modifier = Modifier.width(148.dp).height(56.dp),
                     singleLine = true,
                     enabled = hasInternet && !isSearchingOnline,
                     placeholder = { Text("SEARCH") },
@@ -584,7 +587,7 @@ private fun KosmosScreen(
                             }
                         },
                         enabled = hasInternet && !isDiscoverLoading
-                    ) { Text("Refresh") }
+                    ) { Icon(Icons.Outlined.Refresh, contentDescription = "Refresh Discover") }
                 }
                 Spacer(Modifier.height(8.dp))
                 when {
@@ -904,7 +907,7 @@ private fun EmptyLibrary(
             Text(if (isFiltered) "Nothing found" else "A blank canvas", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
             Text(
-                if (isFiltered) "Try another filter or search." else "Your presets are being prepared. Import something to add more.",
+                if (isFiltered) "Try another filter or search." else "Import a wallpaper to start building your library.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium
             )
@@ -946,10 +949,11 @@ private fun WallpaperTile(
                     modifier = Modifier.fillMaxWidth().aspectRatio(0.78f).clickable(onClick = onClick),
                     contentScale = ContentScale.Crop
                 )
-                TextButton(onClick = onFavorite, modifier = Modifier.align(Alignment.TopStart)) {
+                TextButton(onClick = onFavorite, modifier = Modifier.align(Alignment.TopEnd).padding(2.dp)) {
                     Text(
-                        if (favorite) "★" else "☆",
-                        color = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        "★",
+                        color = if (favorite) Color(0xFFFFC928) else Color(0xFFB8B8B8),
+                        style = MaterialTheme.typography.titleLarge
                     )
                 }
             }
