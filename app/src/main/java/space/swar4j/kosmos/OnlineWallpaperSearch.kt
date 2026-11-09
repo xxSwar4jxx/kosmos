@@ -101,13 +101,13 @@ class OnlineWallpaperSearch {
             setRequestProperty("User-Agent", "ArkaAndroid/0.9.3")
         }
         val gql = """
-            query (${' {
+            query (${'$'}search: String) {
               Page(perPage: 10) {
-                media(search: ${' ANIME, isAdult: false) {
+                media(search: ${'$'}search, type: ANIME, isAdult: false) {
                   title { romaji english }
                   characters(perPage: 8, sort: ROLE) { nodes { name { full } image { large } } }
                 }
-                characters(search: ${' {
+                characters(search: ${'$'}search) {
                   nodes { name { full } image { large } media(perPage: 5) { nodes { title { romaji english } } } }
                 }
               }
