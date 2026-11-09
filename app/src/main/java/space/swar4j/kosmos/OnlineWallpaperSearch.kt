@@ -23,7 +23,11 @@ class OnlineWallpaperSearch {
         if (cleanQuery.isBlank()) return@withContext emptyList()
 
         val primaryQuery = cleanQuery.replace(Regex("(?i)zero\\s*two|zerotwo"), "Zero Two Darling in the Franxx")
-        val queries = linkedSetOf(primaryQuery, "$primaryQuery anime")
+        val queries = linkedSetOf(
+            "intitle:\"$primaryQuery\"",
+            "\"$primaryQuery\"",
+            "$primaryQuery wallpaper"
+        )
         val results = LinkedHashMap<Long, OnlineWallpaperResult>()
 
         for (searchTerm in queries) {
@@ -92,7 +96,7 @@ class OnlineWallpaperSearch {
     }.getOrDefault(false)
 
     companion object {
-        private const val MAX_RESULTS = 40
+        private const val MAX_RESULTS = 60
         private val SUPPORTED_IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif")
     }
 }
