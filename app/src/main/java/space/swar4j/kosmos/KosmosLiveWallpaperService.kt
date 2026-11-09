@@ -7,7 +7,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Movie
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.ImageDecoder
@@ -105,6 +104,8 @@ class KosmosLiveWallpaperService : WallpaperService() {
         override fun onDestroy() {
             stopPlayback()
             gifDecoder.shutdownNow()
+            zeroTechLogo?.recycle()
+            zeroTechLogo = null
             super.onDestroy()
         }
 
@@ -319,8 +320,8 @@ class KosmosLiveWallpaperService : WallpaperService() {
                     val unit = minOf(surfaceWidth, surfaceHeight).toFloat()
                     val logo = zeroTechLogo ?: runCatching {
                         val encoded = assets.open("zerotech_logo.base64").bufferedReader().use { it.readText() }
-                        BitmapFactory.decodeByteArray(Base64.decode(encoded, Base64.DEFAULT), 0,
-                            Base64.decode(encoded, Base64.DEFAULT).size)
+                        val bytes = Base64.decode(encoded, Base64.DEFAULT)
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     }.getOrNull()?.also { zeroTechLogo = it }
 
                     if (logo != null && !logo.isRecycled) {
