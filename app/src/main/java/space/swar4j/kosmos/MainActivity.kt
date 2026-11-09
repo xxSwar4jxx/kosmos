@@ -499,7 +499,11 @@ private fun KosmosScreen(
                                 onRename = { newTitle ->
                                     scope.launch {
                                         runCatching { storage.renameWallpaper(wallpaper.file, newTitle) }
-                                            .onSuccess { refreshLibrary(); snackbarHostState.showSnackbar("Wallpaper renamed") }
+                                            .onSuccess {
+                                                metadata.rename(wallpaper.file.name, it.file.name)
+                                                refreshLibrary()
+                                                snackbarHostState.showSnackbar("Wallpaper renamed")
+                                            }
                                             .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't rename wallpaper") }
                                     }
                                 },
