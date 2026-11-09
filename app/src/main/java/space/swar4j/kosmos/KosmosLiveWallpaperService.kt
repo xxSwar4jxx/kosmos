@@ -110,6 +110,7 @@ class KosmosLiveWallpaperService : WallpaperService() {
             super.onSurfaceChanged(holder, format, width, height)
             surfaceWidth = width
             surfaceHeight = height
+            if (fallbackVisible) drawFallback()
             if (player != null) {
                 runCatching {
                     player?.setVideoSurfaceHolder(holder)
