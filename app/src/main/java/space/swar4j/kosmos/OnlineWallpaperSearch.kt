@@ -30,13 +30,14 @@ class OnlineWallpaperSearch {
             .filter { it.length > 1 }.distinct()
         if (terms.isEmpty()) return@withContext emptyList()
 
-        val unsplash = runCatching { searchUnsplash(clean, terms) }.getOrDefault(emptyList())
-        val commons = runCatching { searchCommons(clean, terms) }.getOrDefault(emptyList())
-        val combined = (unsplash + commons).distinctBy { it.downloadUrl.substringBefore('?') }
-        if (combined.isEmpty() && unsplash.isEmpty() && commons.isEmpty()) {
+        val unsplashAttempt = runCatching { searchUnsplash(clean, terms) }
+        val commonsAttempt = runCatching { searchCommons(clean, terms) }
+        if (unsplashAttempt.isFailure && commonsAttempt.isFailure) {
             throw IOException("Image providers are unavailable. Please try again.")
         }
-        combined.take(40)
+        (unsplashAttempt.getOrDefault(emptyList()) + commonsAttempt.getOrDefault(emptyList()))
+            .distinctBy { it.downloadUrl.substringBefore('?') }
+            .take(40)
     }
 
     private fun searchUnsplash(query: String, terms: List<String>): List<OnlineWallpaperResult> {
@@ -115,7 +116,7 @@ class OnlineWallpaperSearch {
                 val creator = metadata?.optJSONObject("Artist")?.optString("value")
                     ?.replace(Regex("<[^>]*>"), " ")?.trim().orEmpty().ifBlank { "Wikimedia Commons contributor" }
                 val license = metadata?.optJSONObject("LicenseShortName")?.optString("value")
-                    ?.ifBlank { null } ?: "See source license"
+                    ?.takeIf { it.isNotBlank() } ?: "See source license"
                 add(
                     OnlineWallpaperResult(
                         id = "commons-${page.optString("pageid")}",
@@ -153,7 +154,7 @@ class OnlineWallpaperSearch {
     private fun matchesAllTerms(value: String, terms: List<String>): Boolean {
         val normalized = value.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
         val tokens = normalized.split(Regex("\\s+")).toSet()
-        return terms.all { term -> term in tokens || normalized.contains(term) }
+        return terms.all { term -> term in tokens }
     }
 
     private fun isAllowedImageUrl(value: String, hosts: Set<String>): Boolean = runCatching {
