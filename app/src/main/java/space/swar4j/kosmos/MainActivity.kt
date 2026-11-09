@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -98,6 +99,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import kotlin.math.PI
+import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -594,7 +602,7 @@ private fun KosmosScreen(
                     !hasInternet -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("Connect to the internet to discover wallpapers", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    isDiscoverLoading && discoverResults.isEmpty() -> GhostWallpaperGrid(Modifier.weight(1f))
+                    isDiscoverLoading && discoverResults.isEmpty() -> AnimatedGhostWallpaperGrid(Modifier.weight(1f))
                     discoverResults.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("No images available right now. Try Refresh.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -900,6 +908,47 @@ private fun KosmosScreen(
 }
 
 @Composable
+private fun AnimatedGhostWallpaperGrid(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "ghost-wave")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Restart),
+        label = "ghost-wave-phase"
+    )
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 148.dp),
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(12) { index ->
+            val wave = (0.5 + 0.5 * sin(phase * 2.0 * PI - index * 0.62)).toFloat()
+            Column(
+                Modifier.fillMaxWidth()
+                    .graphicsLayer { alpha = 0.48f + wave * 0.42f }
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(9.dp)
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().aspectRatio(0.82f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.fillMaxWidth(0.76f).height(11.dp)
+                    .clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
+                Spacer(Modifier.height(7.dp))
+                Spacer(Modifier.fillMaxWidth(0.48f).height(9.dp)
+                    .clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
+            }
+        }
+    }
+}
+
+@Composable
 private fun EmptyLibrary(
     isImporting: Boolean,
     isFiltered: Boolean,
@@ -912,7 +961,7 @@ private fun EmptyLibrary(
                 Modifier.size(76.dp).clip(RoundedCornerShape(24.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
-            ) { Text("✳", style = MaterialTheme.typography.headlineLarge) }
+            ) { Text("⊘", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.error) }
             Spacer(Modifier.height(18.dp))
             Text(if (isFiltered) "Nothing found" else "A blank canvas", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
