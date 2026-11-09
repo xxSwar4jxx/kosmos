@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -76,6 +77,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
@@ -185,6 +190,7 @@ private fun KosmosScreen(
     var onlineResults by remember { mutableStateOf<List<OnlineWallpaperResult>>(emptyList()) }
     var onlineQuery by rememberSaveable { mutableStateOf("") }
     var isSearchingOnline by remember { mutableStateOf(false) }
+    var isDiscoverLoading by remember { mutableStateOf(false) }
     var selectedWallpaper by remember { mutableStateOf<StoredWallpaper?>(null) }
     var showApplyDialog by remember { mutableStateOf(false) }
     var deleteAfterApply by remember { mutableStateOf(false) }
@@ -200,6 +206,20 @@ private fun KosmosScreen(
     var filter by rememberSaveable { mutableStateOf("All") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showCategoryMenu by remember { mutableStateOf(false) }
+
+    val performOnlineSearch: () -> Unit = {
+        if (hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline) {
+            tab = "Search"
+            scope.launch {
+                isSearchingOnline = true
+                onlineResults = emptyList()
+                runCatching { OnlineWallpaperSearch().search(onlineQuery, page = 1) }
+                    .onSuccess { onlineResults = it }
+                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "Image search failed") }
+                isSearchingOnline = false
+            }
+        }
+    }
 
     fun refreshLibrary() {
         scope.launch {
@@ -250,12 +270,12 @@ private fun KosmosScreen(
         isLoadingCatalogue = false
     }
     LaunchedEffect(tab, hasInternet) {
-        if (tab == "Discover" && hasInternet && discoverResults.isEmpty() && !isLoadingCatalogue) {
-            isLoadingCatalogue = true
-            runCatching { OnlineWallpaperSearch().search(discoverQueries[discoverIndex]) }
+        if (tab == "Discover" && hasInternet && discoverResults.isEmpty() && !isDiscoverLoading) {
+            isDiscoverLoading = true
+            runCatching { OnlineWallpaperSearch().search(discoverQueries[discoverIndex], page = 1) }
                 .onSuccess { discoverResults = it }
                 .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't load Discover") }
-            isLoadingCatalogue = false
+            isDiscoverLoading = false
         }
     }
 
@@ -288,34 +308,24 @@ private fun KosmosScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("ZEROTECH", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary)
-                    Text("KOSMOS", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Image(
+                    painter = painterResource(R.drawable.arka_banner),
+                    contentDescription = "Arka by ZeroTech",
+                    modifier = Modifier.weight(1f).height(58.dp),
+                    contentScale = ContentScale.Fit
+                )
                 OutlinedTextField(
                     value = onlineQuery,
                     onValueChange = { onlineQuery = it },
-                    modifier = Modifier.width(205.dp),
+                    modifier = Modifier.width(148.dp),
                     singleLine = true,
                     enabled = hasInternet && !isSearchingOnline,
-                    placeholder = { Text("Search wallpapers") },
+                    placeholder = { Text("SEARCH") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { performOnlineSearch() }),
                     trailingIcon = {
                         IconButton(
-                            onClick = {
-                                if (hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline) {
-                                    tab = "Search"
-                                    scope.launch {
-                                        isSearchingOnline = true
-                                        onlineResults = emptyList()
-                                        runCatching { OnlineWallpaperSearch().search(onlineQuery) }
-                                            .onSuccess { onlineResults = it }
-                                            .onFailure { snackbarHostState.showSnackbar(it.message ?: "Image search failed") }
-                                        isSearchingOnline = false
-                                    }
-                                }
-                            },
+                            onClick = performOnlineSearch,
                             enabled = hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline
                         ) { Icon(Icons.Outlined.Search, contentDescription = "Search") }
                     }
@@ -504,19 +514,20 @@ private fun KosmosScreen(
                     }
                     TextButton(
                         onClick = {
-                            if (hasInternet && !isLoadingCatalogue) {
-                                discoverIndex = (discoverIndex + 1) % discoverQueries.size
+                            if (hasInternet && !isDiscoverLoading) {
+                                val nextIndex = (discoverIndex + 1) % discoverQueries.size
+                                discoverIndex = nextIndex
                                 scope.launch {
-                                    isLoadingCatalogue = true
+                                    isDiscoverLoading = true
                                     discoverResults = emptyList()
-                                    runCatching { OnlineWallpaperSearch().search(discoverQueries[discoverIndex]) }
+                                    runCatching { OnlineWallpaperSearch().search(discoverQueries[nextIndex], page = 1) }
                                         .onSuccess { discoverResults = it }
                                         .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't refresh Discover") }
-                                    isLoadingCatalogue = false
+                                    isDiscoverLoading = false
                                 }
                             }
                         },
-                        enabled = hasInternet && !isLoadingCatalogue
+                        enabled = hasInternet && !isDiscoverLoading
                     ) { Text("Refresh") }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -524,7 +535,7 @@ private fun KosmosScreen(
                     !hasInternet -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("Connect to the internet to discover wallpapers", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    isLoadingCatalogue && discoverResults.isEmpty() -> GhostWallpaperGrid(Modifier.weight(1f))
+                    isDiscoverLoading && discoverResults.isEmpty() -> GhostWallpaperGrid(Modifier.weight(1f))
                     discoverResults.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("No images available right now. Try Refresh.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -885,7 +896,7 @@ private fun OnlineSearchTile(
         ImageRequest.Builder(context)
             .data(result.previewUrl)
             .crossfade(true)
-            .setHeader("User-Agent", "KosmosAndroid/0.5 (wallpaper previews; https://github.com/xxSwar4jxx/kosmos)")
+            .setHeader("User-Agent", "ArkaAndroid/0.8 (wallpaper previews; https://github.com/xxSwar4jxx/kosmos)")
             .setHeader("Accept", "image/avif,image/webp,image/*,*/*;q=0.8")
             .build()
     }
@@ -968,7 +979,7 @@ private fun CatalogueTile(
         ImageRequest.Builder(context)
             .data(item.previewUrl)
             .crossfade(true)
-            .setHeader("User-Agent", "KosmosAndroid/0.5 (catalogue previews; https://github.com/xxSwar4jxx/kosmos)")
+            .setHeader("User-Agent", "ArkaAndroid/0.8 (catalogue previews; https://github.com/xxSwar4jxx/kosmos)")
             .setHeader("Accept", "image/avif,image/webp,image/*,*/*;q=0.8")
             .build()
     }
