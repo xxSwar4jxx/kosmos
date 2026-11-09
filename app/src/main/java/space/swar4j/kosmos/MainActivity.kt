@@ -44,6 +44,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -61,6 +62,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +73,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
+import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -470,14 +477,21 @@ private fun KosmosScreen(
                         )
                     }
                 } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 148.dp),
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(bottom = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(onlineResults, key = { it.id }) { result ->
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "${onlineResults.size} results",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 148.dp),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(bottom = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(onlineResults, key = { it.id }) { result ->
                             OnlineSearchTile(
                                 result = result,
                                 downloading = downloadingId == "search-${result.id}",
@@ -514,6 +528,7 @@ private fun KosmosScreen(
                                     }
                                 }
                             )
+                            }
                         }
                     }
                 }
@@ -706,42 +721,77 @@ private fun OnlineSearchTile(
     onDownload: () -> Unit,
     onUseAsWallpaper: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val imageRequest = remember(result.previewUrl) {
+        ImageRequest.Builder(context)
+            .data(result.previewUrl)
+            .crossfade(true)
+            .setHeader("User-Agent", "KosmosAndroid/0.5 (wallpaper previews; https://github.com/xxSwar4jxx/kosmos)")
+            .setHeader("Accept", "image/avif,image/webp,image/*,*/*;q=0.8")
+            .build()
+    }
+
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(9.dp)) {
-            AsyncImage(
-                model = result.previewUrl,
+            SubcomposeAsyncImage(
+                model = imageRequest,
                 contentDescription = result.title,
-                modifier = Modifier.fillMaxWidth().aspectRatio(0.72f).clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop
+                modifier = Modifier.fillMaxWidth().aspectRatio(0.82f).clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop,
+                loading = {
+                    Box(
+                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Preview unavailable",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                success = { SubcomposeAsyncImageContent() }
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             Text(result.title, style = MaterialTheme.typography.titleSmall, maxLines = 2)
             Text(result.creator, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             Text(result.license, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
+                androidx.compose.material3.FilledTonalIconButton(
                     onClick = onDownload,
                     enabled = !downloading,
                     modifier = Modifier.weight(1f)
                 ) {
-                    if (downloading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    else Text("Download")
+                    if (downloading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Outlined.FileDownload, contentDescription = "Download wallpaper")
                 }
-                Button(
+                androidx.compose.material3.FilledTonalIconButton(
                     onClick = onUseAsWallpaper,
                     enabled = !downloading,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Use as wallpaper")
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = "Use as wallpaper")
                 }
             }
         }
