@@ -31,23 +31,49 @@ jobs:
         with:
           gradle-version: "8.13"
 
+      - name: Prepare persistent Arka signing key
+        env:
+          ARKA_KEYSTORE_BASE64: ${{ secrets.ARKA_KEYSTORE_BASE64 }}
+          ARKA_KEYSTORE_PASSWORD: ${{ secrets.ARKA_KEYSTORE_PASSWORD }}
+          ARKA_KEY_ALIAS: ${{ secrets.ARKA_KEY_ALIAS }}
+          ARKA_KEY_PASSWORD: ${{ secrets.ARKA_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ARKA_KEYSTORE_BASE64 ARKA_KEYSTORE_PASSWORD ARKA_KEY_ALIAS ARKA_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              exit 1
+            fi
+          done
+          KEYSTORE_PATH="$RUNNER_TEMP/arka-upload.jks"
+          printf '%s' "$ARKA_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          echo "ARKA_KEYSTORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "ARKA_KEYSTORE_PASSWORD=$ARKA_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ARKA_KEY_ALIAS=$ARKA_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ARKA_KEY_PASSWORD=$ARKA_KEY_PASSWORD" >> "$GITHUB_ENV"
+
       - name: Verify toolchain
         run: |
           java -version
           gradle --version
           sdkmanager --list_installed
 
-      - name: Build debug APK
+      - name: Build APK with persistent signing key
         run: gradle --no-daemon --stacktrace assembleDebug
 
       - name: Run Android lint and unit tests
         run: gradle --no-daemon lintDebug testDebugUnitTest
 
+      - name: Name Arka APK
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/Arka-v${GITHUB_RUN_NUMBER}.apk"
+
       - name: Upload lint report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kosmos-lint-report
+          name: arka-lint-report
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
@@ -55,8 +81,8 @@ jobs:
         if: success() && github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: kosmos-build-${{ github.run_number }}-${{ github.run_attempt }}
-          name: Kosmos build ${{ github.run_number }}
+          tag_name: arka-build-${{ github.run_number }}-${{ github.run_attempt }}
+          name: Arka build ${{ github.run_number }}
           prerelease: true
           make_latest: false
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/debug/Arka-v${{ github.run_number }}.apk
