@@ -8,26 +8,26 @@ Arka is an Android wallpaper library for static images and animated wallpapers. 
 
 ### Foundation
 - Kotlin, Jetpack Compose and Material 3.
-- Persistent dark and light theme preference.
+- Fixed dark theme with amber accents.
 - Import JPG, PNG, WebP, GIF and MP4 through Android's document picker.
 - App-private media and thumbnail storage; no broad storage permission.
 - Import size, decoded dimensions, GIF animation and video-duration checks.
 - Search, favourites, categories, media-type filters and generated presets.
-- Four locally generated presets are available without an internet connection.
+- Eight locally generated preinstalled wallpapers are available without an internet connection.
 
 ### Wallpaper engine
 - Static wallpaper application to Home, Lock or Both (subject to Android/OEM support).
 - MP4 live wallpapers through AndroidX Media3 ExoPlayer.
 - GIF live wallpapers through AnimatedImageDrawable on Android 9+ and a compatibility decoder on Android 8/8.1.
 - Playback starts only while the wallpaper engine is visible.
-- Playback, callbacks and pending GIF decoding are stopped or released when hidden or when the surface/engine is destroyed.
+- Playback pauses while the wallpaper is not visible; the video decoder is retained across surface recreation and released when the engine is destroyed.
 - Native Android live-wallpaper preview and confirmation.
 
 ### Discover and downloads
 - Catalogue metadata is served from `catalog/catalogue.json` on this repository's raw GitHub endpoint.
 - Catalogue data is cached locally; the last fetched catalogue remains available offline.
-- Initial entries use public-domain or CC0 images hosted on Wikimedia Commons, with creator and licence shown in the catalogue.
-- Downloads use HTTPS only, enforce a Wikimedia host allowlist across redirects, apply byte limits and pass through the same media validation as local imports.
+- Online search combines Openverse and Wikimedia Commons results, with creator and licence shown when provided.
+- Downloads use HTTPS only, enforce an HTTPS host allowlist across redirects, apply byte limits and pass through the same media validation as local imports.
 - Catalogue preview and download failures do not affect the local library.
 
 ## Video decoding fallback
@@ -47,7 +47,7 @@ GitHub Actions builds a debug APK on pushes and pull requests to `main`.
 - No account, analytics, advertising SDK or telemetry.
 - No broad storage permissions.
 - App backups are disabled; imported wallpaper files remain in app-private storage.
-- Cleartext traffic is disabled. Network access is used only for the read-only catalogue and its allowlisted Wikimedia media.
+- Cleartext traffic is disabled. Network access is used only for the read-only catalogue and allowlisted Openverse/Wikimedia media.
 - Catalogue size, download size, media dimensions and video duration are bounded.
 - Imported and downloaded files are validated before being made visible in the library.
 - Wallpaper paths are checked against the app's private wallpaper directory before use.
