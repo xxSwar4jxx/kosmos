@@ -15,14 +15,29 @@
         android:layout_width="1dp"
         android:layout_height="1dp"
         android:visibility="gone" />
-    <TextView
+    <LinearLayout
         android:id="@+id/widget_media_placeholder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:orientation="vertical"
         android:gravity="center"
-        android:padding="18dp"
-        android:text="Add photos or a video in Arka"
-        android:textColor="#FFE9C7"
-        android:textSize="14sp"
-        android:background="#E6000000" />
+        android:padding="20dp"
+        android:background="#E6000000">
+        <ImageView
+            android:id="@+id/widget_media_placeholder_logo"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:src="@drawable/zerotech_logo"
+            android:scaleType="fitCenter"
+            android:contentDescription="ZeroTech" />
+        <TextView
+            android:id="@+id/widget_media_placeholder_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="center"
+            android:text="Add an image or video to be displayed here"
+            android:textColor="#FFE9C7"
+            android:textSize="14sp" />
+    </LinearLayout>
 </FrameLayout>
