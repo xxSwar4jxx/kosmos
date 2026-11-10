@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
         android:allowBackup="false"
@@ -36,6 +38,7 @@
         </receiver>
         <activity android:name=".MediaWidgetConfigureActivity" android:exported="true" />
         <activity android:name=".MediaWidgetViewerActivity" android:exported="false" />
+        <service android:name=".MediaWidgetPlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
 
         <service
             android:name=".KosmosLiveWallpaperService"
