@@ -336,6 +336,7 @@ private fun KosmosScreen(
                     .onSuccess { wallpaper ->
                         imported++
                         if (importingForPresets) metadata.setPreset(wallpaper.file.name, true)
+                                            PresetsWidgetProvider.refresh(context)
                     }
                     .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't import a selected item") }
             }
@@ -966,6 +967,7 @@ private fun KosmosScreen(
                                 },
                                 onRemove = {
                                     metadata.setPreset(wallpaper.file.name, false)
+                                    PresetsWidgetProvider.refresh(context)
                                     favoriteVersion++
                                 }
                             )
