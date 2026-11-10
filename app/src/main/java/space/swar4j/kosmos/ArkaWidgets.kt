@@ -315,23 +315,23 @@ class MediaWidgetFactory(private val context: Context, private val widgetId: Int
 }
 
 class MediaWidgetActionsActivity : Activity() {
+    companion object { const val EXTRA_SELECTED_FILE = "selected_widget_media_file" }
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         val prefs = getSharedPreferences("arka_media_widgets", MODE_PRIVATE)
-        val name = prefs.getString("media_$id", null)
+        val name = intent.getStringExtra(EXTRA_SELECTED_FILE)
+            ?: MediaWidgetProvider.mediaFiles(this, id).getOrNull(prefs.getInt("index_$id", 0))?.name
+            ?: prefs.getString("media_$id", null)
         val file = name?.let { File(File(filesDir, "widget_media"), it) }
         val exists = file?.isFile == true
-        val options = if (exists) arrayOf("Open Gallery", "Set as wallpaper", "Settings")
-            else arrayOf("Open Gallery", "Set as wallpaper", "Settings")
+        val options = arrayOf("Manage photos", "Set as wallpaper", "Settings")
         android.app.AlertDialog.Builder(this)
             .setTitle("Photo frame")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> if (exists) {
-                        startActivity(Intent(this, MediaWidgetViewerActivity::class.java)
-                            .putExtra(MediaWidgetViewerActivity.EXTRA_FILE, file!!.absolutePath))
-                    } else android.widget.Toast.makeText(this, "Choose a photo or video in Settings first", android.widget.Toast.LENGTH_SHORT).show()
+                    0 -> startActivity(Intent(this, MediaWidgetManageActivity::class.java)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id))
                     1 -> if (exists) applyWidgetWallpaper(file!!) else
                         android.widget.Toast.makeText(this, "Choose a photo or video in Settings first", android.widget.Toast.LENGTH_SHORT).show()
                     2 -> startActivity(Intent(this, MediaWidgetConfigureActivity::class.java)
