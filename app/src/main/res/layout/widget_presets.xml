@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="14dp"
+    android:padding="12dp"
     android:background="#15171C">
     <TextView
         android:layout_width="match_parent"
@@ -12,15 +12,31 @@
         android:text="ARKA PRESETS"
         android:textColor="#FFE9C7"
         android:textStyle="bold"
-        android:textSize="13sp" />
+        android:textSize="13sp"
+        android:paddingBottom="8dp" />
     <TextView
-        android:id="@+id/widget_preset_names"
+        android:id="@+id/widget_preset_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="No presets saved yet"
+        android:textColor="#FFE9C7"
+        android:textSize="13sp"
+        android:visibility="gone" />
+    <GridLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:paddingTop="8dp"
-        android:textColor="#FFE9C7"
-        android:textSize="14sp"
-        android:ellipsize="end"
-        android:maxLines="8" />
+        android:columnCount="2"
+        android:rowCount="4"
+        android:useDefaultMargins="true">
+        <TextView android:id="@+id/widget_preset_1" style="@style/ArkaWidgetPresetButton" />
+        <TextView android:id="@+id/widget_preset_2" style="@style/ArkaWidgetPresetButton" />
+        <TextView android:id="@+id/widget_preset_3" style="@style/ArkaWidgetPresetButton" />
+        <TextView android:id="@+id/widget_preset_4" style="@style/ArkaWidgetPresetButton" />
+        <TextView android:id="@+id/widget_preset_5" style="@style/ArkaWidgetPresetButton" />
+        <TextView android:id="@+id/widget_preset_6" style="@style/ArkaWidgetPresetButton" />
+        <TextView android:id="@+id/widget_preset_7" style="@style/ArkaWidgetPresetButton" />
+        <TextView android:id="@+id/widget_preset_8" style="@style/ArkaWidgetPresetButton" />
+    </GridLayout>
 </LinearLayout>
