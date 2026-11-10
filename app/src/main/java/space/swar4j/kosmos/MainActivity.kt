@@ -1289,7 +1289,7 @@ private fun WallpaperTile(
                             DropdownMenuItem(text = { Text("Rename") }, enabled = !wallpaper.isPreset,
                                 onClick = { menuExpanded = false; showRename = true })
                             DropdownMenuItem(text = { Text("Save to Presets") }, onClick = { menuExpanded = false; onSavePreset() })
-                            DropdownMenuItem(text = { Text(if (favorite) "Remove from ${if (languagePreference == "en-GB") "Favourites" else "Favorites"}" else "Favourite") },
+                            DropdownMenuItem(text = { Text(if (favorite) "Remove from Favourites" else "Favourite") },
                                 onClick = { menuExpanded = false; onFavorite() })
                             if (!wallpaper.isPreset) {
                                 DropdownMenuItem(text = { Text("Remove") }, onClick = { menuExpanded = false; onRemove() })
