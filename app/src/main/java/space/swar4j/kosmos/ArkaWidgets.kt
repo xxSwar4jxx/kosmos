@@ -220,7 +220,7 @@ class MediaWidgetProvider : AppWidgetProvider() {
             val alarm = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             alarm.cancel(pending)
             if (mediaFiles(context, id).size > 1) {
-                alarm.setExactAndAllowWhileIdle(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                alarm.setAndAllowWhileIdle(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
                     android.os.SystemClock.elapsedRealtime() + interval, pending)
             }
         }
@@ -366,6 +366,11 @@ class MediaWidgetActionsActivity : Activity() {
 
 class MediaWidgetConfigureActivity : Activity() {
     private lateinit var fpsPicker: Spinner
+    private lateinit var intervalPicker: Spinner
+    private lateinit var borderPicker: Spinner
+    private lateinit var glowSwitch: android.widget.Switch
+    private lateinit var dynamicGlowSwitch: android.widget.Switch
+    private lateinit var glowColorPicker: Spinner
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -424,6 +429,47 @@ class MediaWidgetConfigureActivity : Activity() {
         fpsPicker.setSelection(fpsOptions.indexOf(savedFps).takeIf { it >= 0 } ?: 1)
         content.addView(fpsPicker)
         content.addView(TextView(this).apply {
+            text = "AUTO SCROLL INTERVAL"
+            textSize = 12f
+            setTextColor(accent)
+            setPadding(0, 20, 0, 8)
+        })
+        intervalPicker = Spinner(this)
+        val intervalLabels = listOf("10 seconds", "30 seconds", "1 minute", "2 minutes", "5 minutes", "10 minutes", "30 minutes", "1 day")
+        intervalPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, intervalLabels)
+        val intervalValues = listOf(10000L, 30000L, 60000L, 120000L, 300000L, 600000L, 1800000L, 86400000L)
+        intervalPicker.setSelection(intervalValues.indexOf(prefs.getLong("interval_$widgetId", 30000L)).coerceAtLeast(0))
+        content.addView(intervalPicker)
+        content.addView(TextView(this).apply {
+            text = "FRAME BORDER"
+            textSize = 12f
+            setTextColor(accent)
+            setPadding(0, 20, 0, 8)
+        })
+        borderPicker = Spinner(this)
+        val borderValues = listOf(0, 2, 4, 6, 8, 12)
+        borderPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, borderValues.map { "$it dp" })
+        borderPicker.setSelection(borderValues.indexOf(prefs.getInt("border_width_$widgetId", 0)).coerceAtLeast(0))
+        content.addView(borderPicker)
+        glowSwitch = android.widget.Switch(this).apply {
+            text = "Glow border"
+            setTextColor(foreground)
+            isChecked = prefs.getBoolean("glow_$widgetId", false)
+        }
+        content.addView(glowSwitch)
+        dynamicGlowSwitch = android.widget.Switch(this).apply {
+            text = "Dynamic glow (image edge colour)"
+            setTextColor(foreground)
+            isChecked = prefs.getBoolean("dynamic_glow_$widgetId", true)
+        }
+        content.addView(dynamicGlowSwitch)
+        glowColorPicker = Spinner(this)
+        val glowLabels = listOf("Amber", "White", "Blue", "Green", "Pink", "Purple")
+        glowColorPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, glowLabels)
+        val glowColors = listOf(Color.rgb(255,181,71), Color.WHITE, Color.rgb(80,160,255), Color.rgb(100,220,150), Color.rgb(255,120,170), Color.rgb(180,120,255))
+        glowColorPicker.setSelection(glowColors.indexOf(prefs.getInt("glow_color_$widgetId", glowColors[0])).coerceAtLeast(0))
+        content.addView(glowColorPicker)
+        content.addView(TextView(this).apply {
             text = "Higher frame rates may use more battery and launcher resources."
             textSize = 12f
             setTextColor(foreground)
@@ -454,8 +500,17 @@ class MediaWidgetConfigureActivity : Activity() {
 
     private fun saveSettings() {
         val fps = listOf(8, 12, 16, 24, 30)[fpsPicker.selectedItemPosition]
+        val intervals = listOf(10000L, 30000L, 60000L, 120000L, 300000L, 600000L, 1800000L, 86400000L)
+        val borders = listOf(0, 2, 4, 6, 8, 12)
+        val colors = listOf(Color.rgb(255,181,71), Color.WHITE, Color.rgb(80,160,255), Color.rgb(100,220,150), Color.rgb(255,120,170), Color.rgb(180,120,255))
         getSharedPreferences("arka_media_widgets", MODE_PRIVATE).edit()
-            .putInt("fps_$widgetId", fps).apply()
+            .putInt("fps_$widgetId", fps)
+            .putLong("interval_$widgetId", intervals[intervalPicker.selectedItemPosition])
+            .putInt("border_width_$widgetId", borders[borderPicker.selectedItemPosition])
+            .putBoolean("glow_$widgetId", glowSwitch.isChecked)
+            .putBoolean("dynamic_glow_$widgetId", dynamicGlowSwitch.isChecked)
+            .putInt("glow_color_$widgetId", colors[glowColorPicker.selectedItemPosition])
+            .apply()
         MediaWidgetProvider.update(this, AppWidgetManager.getInstance(this), widgetId)
         val currentName = getSharedPreferences("arka_media_widgets", MODE_PRIVATE).getString("media_$widgetId", null)
         if (currentName?.endsWith(".mp4", true) == true) {
