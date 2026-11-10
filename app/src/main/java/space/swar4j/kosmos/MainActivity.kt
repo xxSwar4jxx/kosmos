@@ -268,6 +268,8 @@ private fun KosmosScreen(
     fun refreshLibrary() {
         scope.launch {
             wallpapers = withContext(Dispatchers.IO) { storage.listWallpapers() }
+            PresetsWidgetProvider.refresh(context)
+            MediaWidgetProvider.refresh(context)
         }
     }
 
@@ -277,7 +279,8 @@ private fun KosmosScreen(
         if (uri != null) scope.launch {
             isImporting = true
             runCatching { storage.importMedia(uri) }
-                .onSuccess {
+                 .onSuccess {
+                    metadata.autoCategorize(it.file.name, it.title)
                     refreshLibrary()
                     selectedWallpaper = it
                     snackbarHostState.showSnackbar("Added to your library")
@@ -790,7 +793,7 @@ private fun KosmosScreen(
                                     if (downloadingId == null) scope.launch {
                                         downloadingId = "discover-${result.id}"
                                         runCatching { storage.downloadSearchResult(result) }
-                                            .onSuccess { refreshLibrary(); snackbarHostState.showSnackbar("Saved to your library") }
+                                             .onSuccess { saved -> metadata.autoCategorize(saved.file.name, result.title); refreshLibrary(); snackbarHostState.showSnackbar("Saved to your library") }
                                             .onFailure { snackbarHostState.showSnackbar(it.message ?: "Download failed") }
                                         downloadingId = null
                                     }

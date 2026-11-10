@@ -19,7 +19,14 @@ class WallpaperMetadataStore(context: Context) {
 
     fun category(fileName: String): String {
         preferences.getString(categoryKey(fileName), null)?.let { return it }
+        val title = fileName.substringBefore("__").substringBeforeLast('.').lowercase()
         return when {
+            listOf("anime", "manga", "waifu", "character").any(title::contains) -> "Anime"
+            listOf("forest", "nature", "mountain", "ocean", "flower", "landscape").any(title::contains) -> "Nature"
+            listOf("space", "galaxy", "nebula", "planet", "star", "cosmos").any(title::contains) -> "Space"
+            listOf("minimal", "monochrome", "simple").any(title::contains) -> "Minimal"
+            listOf("abstract", "gradient", "geometric", "pattern").any(title::contains) -> "Abstract"
+            else -> when {
             fileName.startsWith("preset_aurora") -> "Nature"
             fileName.startsWith("preset_cosmos") -> "Space"
             fileName.startsWith("preset_dusk") -> "Abstract"
@@ -30,6 +37,20 @@ class WallpaperMetadataStore(context: Context) {
             fileName.startsWith("preset_citrus") || fileName.startsWith("preset_midnight") -> "Abstract"
             else -> "Unsorted"
         }
+        }
+    }
+
+    fun autoCategorize(fileName: String, title: String, providerCategory: String? = null) {
+        val value = "$title $fileName ${providerCategory.orEmpty()}".lowercase()
+        val category = when {
+            listOf("anime", "manga", "character", "waifu").any(value::contains) -> "Anime"
+            listOf("forest", "nature", "mountain", "ocean", "flower", "landscape").any(value::contains) -> "Nature"
+            listOf("space", "galaxy", "nebula", "planet", "star", "cosmos").any(value::contains) -> "Space"
+            listOf("minimal", "minimalist", "monochrome", "simple").any(value::contains) -> "Minimal"
+            listOf("abstract", "gradient", "geometric", "pattern").any(value::contains) -> "Abstract"
+            else -> "Unsorted"
+        }
+        setCategory(fileName, category)
     }
 
     fun remove(fileName: String) {
