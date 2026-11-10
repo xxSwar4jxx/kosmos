@@ -13,6 +13,13 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.BlurMaskFilter
+import android.graphics.Color
+import android.content.res.Resources
+import android.widget.RemoteViewsService
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Handler
@@ -147,34 +154,75 @@ class MediaWidgetProvider : AppWidgetProvider() {
         ids.forEach { update(context, manager, it) }
     }
 
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_ADVANCE) {
+            val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1)
+            if (id != -1) {
+                val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
+                val count = mediaFiles(context, id).size
+                if (count > 1) {
+                    val next = (prefs.getInt("index_$id", 0) + 1) % count
+                    prefs.edit().putInt("index_$id", next).apply()
+                    val views = RemoteViews(context.packageName, R.layout.widget_media)
+                    views.setDisplayedChild(R.id.widget_media_stack, next)
+                    AppWidgetManager.getInstance(context).partiallyUpdateAppWidget(id, views)
+                }
+                scheduleAdvance(context, id)
+            }
+        }
+    }
+
     companion object {
+        const val ACTION_ADVANCE = "space.swar4j.kosmos.MEDIA_WIDGET_ADVANCE"
+        fun mediaFiles(context: Context, id: Int): List<File> {
+            val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
+            val dir = File(context.filesDir, "widget_media")
+            val images = prefs.getStringSet("images_$id", emptySet()).orEmpty()
+                .map { File(dir, it) }.filter { it.isFile }
+            val videoName = prefs.getString("video_$id", null)
+            val video = videoName?.let { File(dir, it) }?.takeIf { it.isFile }
+            return images + listOfNotNull(video)
+        }
+
         fun update(context: Context, manager: AppWidgetManager, id: Int) {
             val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
-            val name = prefs.getString("media_$id", null)
-            val file = name?.let { File(File(context.filesDir, "widget_media"), it) }
+            val files = mediaFiles(context, id)
             val views = RemoteViews(context.packageName, R.layout.widget_media)
-            if (file != null && file.isFile) {
-                val bitmap = if (file.extension.equals("mp4", true)) {
-                    val retriever = MediaMetadataRetriever()
-                    try {
-                        retriever.setDataSource(file.absolutePath)
-                        retriever.getFrameAtTime(0)
-                    } catch (_: Exception) { null } finally { runCatching { retriever.release() } }
-                } else BitmapFactory.decodeFile(file.absolutePath)
-                if (bitmap != null) {
-                    views.setImageViewBitmap(R.id.widget_media_image, bitmap)
-                    views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
-                }
-            } else {
-                views.setImageViewResource(R.id.widget_media_image, R.drawable.zerotech_logo)
+            if (files.isEmpty()) {
                 views.setViewVisibility(R.id.widget_media_placeholder, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
+                val service = Intent(context, MediaWidgetRemoteViewsService::class.java)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                views.setRemoteAdapter(R.id.widget_media_stack, service)
+                views.setEmptyView(R.id.widget_media_stack, R.id.widget_media_placeholder)
+                val click = Intent(context, MediaWidgetActionsActivity::class.java)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                val template = PendingIntent.getActivity(context, id + 5000, click,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+                views.setPendingIntentTemplate(R.id.widget_media_stack, template)
+                val index = prefs.getInt("index_$id", 0).coerceIn(0, files.lastIndex)
+                views.setDisplayedChild(R.id.widget_media_stack, index)
+                manager.notifyAppWidgetViewDataChanged(id, R.id.widget_media_stack)
             }
-            val actions = Intent(context, MediaWidgetActionsActivity::class.java)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-            val openActions = PendingIntent.getActivity(context, id, actions,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            views.setOnClickPendingIntent(R.id.widget_media_root, openActions)
             manager.updateAppWidget(id, views)
+            scheduleAdvance(context, id)
+        }
+
+        fun scheduleAdvance(context: Context, id: Int) {
+            val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
+            val interval = prefs.getLong("interval_$id", 30_000L).coerceAtLeast(10_000L)
+            val intent = Intent(context, MediaWidgetProvider::class.java)
+                .setAction(ACTION_ADVANCE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            val pending = PendingIntent.getBroadcast(context, id + 7000, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val alarm = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            alarm.cancel(pending)
+            if (mediaFiles(context, id).size > 1) {
+                alarm.setExactAndAllowWhileIdle(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    android.os.SystemClock.elapsedRealtime() + interval, pending)
+            }
         }
 
         fun refresh(context: Context) {
@@ -183,6 +231,87 @@ class MediaWidgetProvider : AppWidgetProvider() {
                 .forEach { update(context, manager, it) }
         }
     }
+}
+
+class MediaWidgetRemoteViewsService : RemoteViewsService() {
+    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
+        MediaWidgetFactory(applicationContext, intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1))
+}
+
+class MediaWidgetFactory(private val context: Context, private val widgetId: Int) : RemoteViewsService.RemoteViewsFactory {
+    private var files: List<File> = emptyList()
+    override fun onCreate() { refresh() }
+    override fun onDataSetChanged() { refresh() }
+    private fun refresh() { files = MediaWidgetProvider.mediaFiles(context, widgetId) }
+    override fun onDestroy() {}
+    override fun getCount() = files.size
+    override fun getViewAt(position: Int): RemoteViews? {
+        val file = files.getOrNull(position) ?: return null
+        val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
+        val bitmap = if (file.extension.equals("mp4", true)) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(file.absolutePath)
+                val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                val frameMs = prefs.getLong("video_frame_$widgetId", 0L).coerceAtMost(duration)
+                retriever.getFrameAtTime(frameMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
+            } catch (_: Exception) { null } finally { runCatching { retriever.release() } }
+        } else BitmapFactory.decodeFile(file.absolutePath)
+        val views = RemoteViews(context.packageName, R.layout.widget_media_item)
+        if (bitmap != null) {
+            val styled = styleFrame(bitmap, prefs)
+            views.setImageViewBitmap(R.id.widget_media_item_image, styled)
+            if (styled !== bitmap) styled.recycle()
+            bitmap.recycle()
+        }
+        views.setOnClickFillInIntent(R.id.widget_media_item_image,
+            Intent().putExtra(MediaWidgetActionsActivity.EXTRA_SELECTED_FILE, file.name))
+        return views
+    }
+    private fun styleFrame(source: Bitmap, prefs: android.content.SharedPreferences): Bitmap {
+        val width = source.width
+        val height = source.height
+        val border = prefs.getInt("border_width_$widgetId", 0).coerceIn(0, 20).toFloat()
+        val glow = prefs.getBoolean("glow_$widgetId", false)
+        val dynamic = prefs.getBoolean("dynamic_glow_$widgetId", true)
+        val selected = prefs.getInt("glow_color_$widgetId", Color.rgb(255,181,71))
+        val color = if (dynamic) {
+            var red=0L; var green=0L; var blue=0L; var count=0L
+            val inset = 3.coerceAtMost(minOf(width,height)/4)
+            for (x in inset until width-inset step maxOf(1,width/80)) {
+                for (y in listOf(inset, height-inset-1)) {
+                    val c=source.getPixel(x,y); red+=Color.red(c); green+=Color.green(c); blue+=Color.blue(c); count++
+                }
+            }
+            for (y in inset until height-inset step maxOf(1,height/80)) {
+                for (x in listOf(inset, width-inset-1)) {
+                    val c=source.getPixel(x,y); red+=Color.red(c); green+=Color.green(c); blue+=Color.blue(c); count++
+                }
+            }
+            if(count>0) Color.rgb((red/count).toInt(),(green/count).toInt(),(blue/count).toInt()) else selected
+        } else selected
+        if (border <= 0f && !glow) return source
+        val pad = (border + if (glow) 18f else 0f).toInt()
+        val output = Bitmap.createBitmap(width+pad*2,height+pad*2,Bitmap.Config.ARGB_8888)
+        val canvas=Canvas(output)
+        if(glow) {
+            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color=color; style=Paint.Style.STROKE; strokeWidth=maxOf(3f,border+2f)
+                maskFilter=BlurMaskFilter(16f,BlurMaskFilter.Blur.NORMAL)
+            }
+            canvas.drawRoundRect(RectF(pad.toFloat(),pad.toFloat(),(pad+width).toFloat(),(pad+height).toFloat()),12f,12f,paint)
+        }
+        canvas.drawBitmap(source,pad.toFloat(),pad.toFloat(),Paint(Paint.ANTI_ALIAS_FLAG))
+        if(border>0) {
+            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=selected; style=Paint.Style.STROKE; strokeWidth=border }
+            canvas.drawRoundRect(RectF(pad+border/2,pad+border/2,pad+width-border/2,pad+height-border/2),8f,8f,paint)
+        }
+        return output
+    }
+    override fun getLoadingView(): RemoteViews? = null
+    override fun getViewTypeCount() = 1
+    override fun getItemId(position: Int) = files.getOrNull(position)?.name?.hashCode()?.toLong() ?: position.toLong()
+    override fun hasStableIds() = true
 }
 
 class MediaWidgetActionsActivity : Activity() {
