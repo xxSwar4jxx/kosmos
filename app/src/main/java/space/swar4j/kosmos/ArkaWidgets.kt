@@ -12,6 +12,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.view.View
@@ -230,7 +231,8 @@ class MediaWidgetViewerActivity : Activity() {
 
 
 class MediaWidgetPlaybackService : Service() {
-    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var worker: HandlerThread
+    private lateinit var handler: Handler
     private val retrievers = mutableMapOf<Int, MediaMetadataRetriever>()
     private val lastFrameAt = mutableMapOf<Int, Long>()
     private val startedAt = SystemClock.elapsedRealtime()
@@ -241,10 +243,12 @@ class MediaWidgetPlaybackService : Service() {
             val prefs = getSharedPreferences("arka_media_widgets", MODE_PRIVATE)
             if (ids.isEmpty()) { stopSelf(); return }
             val now = SystemClock.elapsedRealtime()
+            var hasVideo = false
             ids.forEach { id ->
                 val name = prefs.getString("media_$id", null) ?: return@forEach
                 val file = File(File(filesDir, "widget_media"), name)
                 if (!file.isFile || !file.extension.equals("mp4", true)) return@forEach
+                hasVideo = true
                 val fps = prefs.getInt("fps_$id", 12).coerceIn(8, 16)
                 val interval = 1000L / fps
                 if (now - (lastFrameAt[id] ?: 0L) < interval) return@forEach
@@ -273,12 +277,15 @@ class MediaWidgetPlaybackService : Service() {
                     bitmap.recycle()
                 }
             }
+            if (!hasVideo) { stopSelf(); return }
             handler.postDelayed(this, 62L)
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        worker = HandlerThread("ArkaWidgetFrames").apply { start() }
+        handler = Handler(worker.looper)
         val channelId = "arka_widget_playback"
         if (android.os.Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(channelId, "Arka video widgets", NotificationManager.IMPORTANCE_LOW)
@@ -314,6 +321,7 @@ class MediaWidgetPlaybackService : Service() {
         handler.removeCallbacks(tick)
         retrievers.values.forEach { runCatching { it.release() } }
         retrievers.clear()
+        if (::worker.isInitialized) worker.quitSafely()
         super.onDestroy()
     }
 
