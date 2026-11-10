@@ -245,6 +245,34 @@ private fun KosmosScreen(
         mutableStateOf(settings.getBoolean("blur_non_explicit_sensitive_previews", true))
     }
     var languagePreference by rememberSaveable { mutableStateOf(settings.getString("language_preference", "") ?: "") }
+    val availableLanguages = listOf(
+        "en-GB" to "English (UK)",
+        "en-US" to "English (US)",
+        "hi" to "हिन्दी",
+        "bn" to "বাংলা",
+        "ta" to "தமிழ்",
+        "te" to "తెలుగు",
+        "mr" to "मराठी",
+        "gu" to "ગુજરાતી",
+        "kn" to "ಕನ್ನಡ",
+        "ml" to "മലയാളം",
+        "pa" to "ਪੰਜਾਬੀ",
+        "ur" to "اردو",
+        "ar" to "العربية",
+        "zh-CN" to "中文 (简体)",
+        "ja" to "日本語",
+        "ko" to "한국어",
+        "es" to "Español",
+        "fr" to "Français",
+        "de" to "Deutsch",
+        "it" to "Italiano",
+        "pt" to "Português",
+        "ru" to "Русский",
+        "nl" to "Nederlands",
+        "id" to "Bahasa Indonesia",
+        "tr" to "Türkçe",
+        "el" to "Ελληνικά"
+    )
     val favouritesLabel = if (languagePreference == "en-GB") "Favourites" else "Favorites"
 
     val performOnlineSearch: () -> Unit = {
@@ -446,7 +474,7 @@ private fun KosmosScreen(
                                     SettingsDropdown(
                                         title = "App language",
                                         selected = languagePreference.ifBlank { "en-GB" },
-                                        options = listOf("en-GB" to "English (UK)", "en-US" to "English (US)"),
+                                        options = availableLanguages,
                                         onSelected = {
                                             languagePreference = it
                                             settings.edit { putString("language_preference", it) }
@@ -1024,19 +1052,23 @@ private fun KosmosScreen(
                 settings.edit { putString("language_preference", "en-GB") }
             },
             title = { Text("Choose your language") },
-            text = { Text("Choose your preferred English spelling. You can change this later in General settings.") },
-            confirmButton = {
+            text = {
                 Column {
-                    TextButton(onClick = {
-                        languagePreference = "en-GB"
-                        settings.edit { putString("language_preference", "en-GB") }
-                    }) { Text("English (UK)") }
-                    TextButton(onClick = {
-                        languagePreference = "en-US"
-                        settings.edit { putString("language_preference", "en-US") }
-                    }) { Text("English (US)") }
+                    Text("Choose your preferred language. You can change this later in General settings.")
+                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                        items(availableLanguages) { (code, label) ->
+                            TextButton(
+                                onClick = {
+                                    languagePreference = code
+                                    settings.edit { putString("language_preference", code) }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(label) }
+                        }
+                    }
                 }
-            }
+            },
+            confirmButton = {}
         )
     }
 
