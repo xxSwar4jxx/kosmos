@@ -241,22 +241,25 @@ class MediaWidgetRemoteViewsService : RemoteViewsService() {
 
 class MediaWidgetFactory(private val context: Context, private val widgetId: Int) : RemoteViewsService.RemoteViewsFactory {
     private var files: List<File> = emptyList()
+    private var videoRetriever: MediaMetadataRetriever? = null
     override fun onCreate() { refresh() }
     override fun onDataSetChanged() { refresh() }
     private fun refresh() { files = MediaWidgetProvider.mediaFiles(context, widgetId) }
-    override fun onDestroy() {}
+    override fun onDestroy() { runCatching { videoRetriever?.release() }; videoRetriever = null }
     override fun getCount() = files.size
     override fun getViewAt(position: Int): RemoteViews? {
         val file = files.getOrNull(position) ?: return null
         val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
         val bitmap = if (file.extension.equals("mp4", true)) {
-            val retriever = MediaMetadataRetriever()
             try {
-                retriever.setDataSource(file.absolutePath)
+                val retriever = videoRetriever ?: MediaMetadataRetriever().also {
+                    it.setDataSource(file.absolutePath)
+                    videoRetriever = it
+                }
                 val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
                 val frameMs = prefs.getLong("video_frame_$widgetId", 0L).coerceAtMost(duration)
                 retriever.getFrameAtTime(frameMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
-            } catch (_: Exception) { null } finally { runCatching { retriever.release() } }
+            } catch (_: Exception) { null }
         } else BitmapFactory.decodeFile(file.absolutePath)
         val views = RemoteViews(context.packageName, R.layout.widget_media_item)
         if (bitmap != null) {
