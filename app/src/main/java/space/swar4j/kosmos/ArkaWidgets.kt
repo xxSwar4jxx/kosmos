@@ -650,25 +650,7 @@ class MediaWidgetPlaybackService : Service() {
                 val timestampMs = (now - startedAt).coerceAtLeast(0L) % duration.coerceAtLeast(1L)
                 prefs.edit().putLong("video_frame_$id", timestampMs).apply()
                 manager.notifyAppWidgetViewDataChanged(id, R.id.widget_media_stack)
-                val timestampUs = timestampMs * 1000L
-                val bitmap = runCatching { retriever.getFrameAtTime(timestampUs, MediaMetadataRetriever.OPTION_CLOSEST) }.getOrNull()
-                if (bitmap != null) {
-                    val scale = minOf(1f, 480f / maxOf(bitmap.width, bitmap.height))
-                    val output = if (scale < 1f) Bitmap.createScaledBitmap(bitmap,
-                        (bitmap.width * scale).toInt().coerceAtLeast(1),
-                        (bitmap.height * scale).toInt().coerceAtLeast(1), true) else bitmap
-                    val views = RemoteViews(packageName, R.layout.widget_media)
-                    views.setImageViewBitmap(R.id.widget_media_image, output)
-                    views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
-                    val actions = PendingIntent.getActivity(this@MediaWidgetPlaybackService, id,
-                        Intent(this@MediaWidgetPlaybackService, MediaWidgetActionsActivity::class.java)
-                            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id),
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                    views.setOnClickPendingIntent(R.id.widget_media_root, actions)
-                    manager.updateAppWidget(id, views)
-                    if (output !== bitmap) output.recycle()
-                    bitmap.recycle()
-                }
+
             }
             if (!hasVideo) { stopSelf(); return }
             handler.postDelayed(this, 62L)
