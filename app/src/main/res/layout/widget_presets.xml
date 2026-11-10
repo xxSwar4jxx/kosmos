@@ -30,13 +30,109 @@
         android:columnCount="2"
         android:rowCount="4"
         android:useDefaultMargins="true">
-        <TextView android:id="@+id/widget_preset_1" style="@style/ArkaWidgetPresetButton" />
-        <TextView android:id="@+id/widget_preset_2" style="@style/ArkaWidgetPresetButton" />
-        <TextView android:id="@+id/widget_preset_3" style="@style/ArkaWidgetPresetButton" />
-        <TextView android:id="@+id/widget_preset_4" style="@style/ArkaWidgetPresetButton" />
-        <TextView android:id="@+id/widget_preset_5" style="@style/ArkaWidgetPresetButton" />
-        <TextView android:id="@+id/widget_preset_6" style="@style/ArkaWidgetPresetButton" />
-        <TextView android:id="@+id/widget_preset_7" style="@style/ArkaWidgetPresetButton" />
-        <TextView android:id="@+id/widget_preset_8" style="@style/ArkaWidgetPresetButton" />
+        <TextView
+            android:id="@+id/widget_preset_1"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:gravity="center"
+            android:background="#24262D"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+        <TextView
+            android:id="@+id/widget_preset_2"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:gravity="center"
+            android:background="#24262D"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+        <TextView
+            android:id="@+id/widget_preset_3"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:gravity="center"
+            android:background="#24262D"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+        <TextView
+            android:id="@+id/widget_preset_4"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:gravity="center"
+            android:background="#24262D"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+        <TextView
+            android:id="@+id/widget_preset_5"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:gravity="center"
+            android:background="#24262D"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+        <TextView
+            android:id="@+id/widget_preset_6"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:gravity="center"
+            android:background="#24262D"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+        <TextView
+            android:id="@+id/widget_preset_7"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:gravity="center"
+            android:background="#24262D"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+        <TextView
+            android:id="@+id/widget_preset_8"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:gravity="center"
+            android:background="#24262D"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:padding="6dp"
+            android:clickable="true"
+            android:focusable="true" />
     </GridLayout>
 </LinearLayout>
