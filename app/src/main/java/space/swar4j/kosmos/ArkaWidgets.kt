@@ -78,11 +78,25 @@ class PresetsWidgetProvider : AppWidgetProvider() {
                 it.isFile && it.name in saved
             }.sortedBy { it.name }.take(8)
 
-            val views = RemoteViews(context.packageName, R.layout.widget_presets)
+            val theme = context.getSharedPreferences("arka_settings", Context.MODE_PRIVATE)
+                .getString("theme_mode", "default") ?: "default"
+            val (surfaceColor, buttonColor, textColor) = when (theme) {
+                "light" -> Triple(0xFFFFFFFF.toInt(), 0xFFF0F0F0.toInt(), 0xFF202124.toInt())
+                "forest" -> Triple(0xFF07140D.toInt(), 0xFF1B3525.toInt(), 0xFFE2F3E4.toInt())
+                "dark" -> Triple(0xFF000000.toInt(), 0xFF202020.toInt(), 0xFFFFE9C7.toInt())
+                "system" -> Triple(0xFF15171C.toInt(), 0xFF24262D.toInt(), 0xFFFFE9C7.toInt())
+                else -> Triple(0xFF15171C.toInt(), 0xFF24262D.toInt(), 0xFFFFE9C7.toInt())
+            }
+            views.setInt(R.id.widget_presets_root, "setBackgroundColor", surfaceColor)
+            views.setTextColor(R.id.widget_preset_title, textColor)
+            views.setTextColor(R.id.widget_preset_empty, textColor)
             val buttonIds = intArrayOf(
                 R.id.widget_preset_1, R.id.widget_preset_2, R.id.widget_preset_3, R.id.widget_preset_4,
                 R.id.widget_preset_5, R.id.widget_preset_6, R.id.widget_preset_7, R.id.widget_preset_8
             )
+            val minWidth = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
+                .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180)
+            val compact = minWidth < 230
             buttonIds.forEachIndexed { index, buttonId ->
                 val file = presets.getOrNull(index)
                 if (file == null) {
@@ -91,21 +105,21 @@ class PresetsWidgetProvider : AppWidgetProvider() {
                     val rawName = file.nameWithoutExtension
                     val cleanName = rawName
                         .replace(Regex("[ _]?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}.*$"), "")
-                        .removePrefix("preset_")
-                        .replace('_', ' ')
-                        .trim()
-                    val label = when (cleanName.lowercase()) {
+                        .removePrefix("preset_").replace('_', ' ').trim()
+                    val fullLabel = when (cleanName.lowercase()) {
                         "retro prism" -> "Prism"
                         "retro orbit" -> "Orbit"
                         "retro spectrum" -> "Spectrum"
                         "retro bluehour" -> "Blue Hour"
                         else -> cleanName.ifBlank { "Preset ${index + 1}" }
                     }
+                    val label = if (compact || fullLabel.length > 9) "P${index + 1}" else fullLabel
                     views.setTextViewText(buttonId, label)
+                    views.setTextColor(buttonId, textColor)
+                    views.setInt(buttonId, "setBackgroundColor", buttonColor)
                     views.setViewVisibility(buttonId, View.VISIBLE)
                     val apply = Intent(context, PresetsWidgetProvider::class.java)
-                        .setAction(ACTION_APPLY_PRESET)
-                        .putExtra(EXTRA_PRESET_FILE, file.name)
+                        .setAction(ACTION_APPLY_PRESET).putExtra(EXTRA_PRESET_FILE, file.name)
                     val click = PendingIntent.getBroadcast(
                         context, id * 10 + index, apply,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -155,11 +169,11 @@ class MediaWidgetProvider : AppWidgetProvider() {
                 views.setImageViewResource(R.id.widget_media_image, R.drawable.zerotech_logo)
                 views.setViewVisibility(R.id.widget_media_placeholder, View.VISIBLE)
             }
-            val configure = Intent(context, MediaWidgetConfigureActivity::class.java)
+            val actions = Intent(context, MediaWidgetActionsActivity::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-            val openSettings = PendingIntent.getActivity(context, id, configure,
+            val openActions = PendingIntent.getActivity(context, id, actions,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            views.setOnClickPendingIntent(R.id.widget_media_root, openSettings)
+            views.setOnClickPendingIntent(R.id.widget_media_root, openActions)
             manager.updateAppWidget(id, views)
         }
 
@@ -342,11 +356,11 @@ class MediaWidgetPlaybackService : Service() {
                     val views = RemoteViews(packageName, R.layout.widget_media)
                     views.setImageViewBitmap(R.id.widget_media_image, output)
                     views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
-                    val configure = PendingIntent.getActivity(this@MediaWidgetPlaybackService, id,
-                        Intent(this@MediaWidgetPlaybackService, MediaWidgetConfigureActivity::class.java)
+                    val actions = PendingIntent.getActivity(this@MediaWidgetPlaybackService, id,
+                        Intent(this@MediaWidgetPlaybackService, MediaWidgetActionsActivity::class.java)
                             .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id),
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                    views.setOnClickPendingIntent(R.id.widget_media_root, configure)
+                    views.setOnClickPendingIntent(R.id.widget_media_root, actions)
                     manager.updateAppWidget(id, views)
                     if (output !== bitmap) output.recycle()
                     bitmap.recycle()
