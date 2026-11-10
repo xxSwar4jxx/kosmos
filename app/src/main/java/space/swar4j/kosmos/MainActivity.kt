@@ -608,6 +608,17 @@ private fun KosmosScreen(
                                             favoriteVersion++
                                             scope.launch { snackbarHostState.showSnackbar("Saved to Presets") }
                                         },
+                                        onRename = { newTitle ->
+                                            scope.launch {
+                                                runCatching { storage.renameWallpaper(wallpaper.file, newTitle) }
+                                                    .onSuccess {
+                                                        metadata.rename(wallpaper.file.name, it.file.name)
+                                                        refreshLibrary()
+                                                        snackbarHostState.showSnackbar("Wallpaper renamed")
+                                                    }
+                                                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't rename wallpaper") }
+                                            }
+                                        },
                                         onRemove = {
                                             scope.launch {
                                                 runCatching {
@@ -649,6 +660,17 @@ private fun KosmosScreen(
                                             metadata.setPreset(wallpaper.file.name, true)
                                             favoriteVersion++
                                             scope.launch { snackbarHostState.showSnackbar("Saved to Presets") }
+                                        },
+                                        onRename = { newTitle ->
+                                            scope.launch {
+                                                runCatching { storage.renameWallpaper(wallpaper.file, newTitle) }
+                                                    .onSuccess {
+                                                        metadata.rename(wallpaper.file.name, it.file.name)
+                                                        refreshLibrary()
+                                                        snackbarHostState.showSnackbar("Wallpaper renamed")
+                                                    }
+                                                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't rename wallpaper") }
+                                            }
                                         },
                                         onRemove = {
                                             scope.launch {
