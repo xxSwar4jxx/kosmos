@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="wallpaper_description">A live wallpaper powered by Arka</string>
+    <string name="widget_presets_description">Arka preset collection</string>
+    <string name="widget_media_description">Display a photo or video from Arka</string>
 </resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_media_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#101010">
+    <ImageView
+        android:id="@+id/widget_media_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop" />
+    <LinearLayout
+        android:id="@+id/widget_media_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:background="#E6000000">
+        <ImageView
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            android:src="@drawable/zerotech_logo"
+            android:scaleType="fitCenter" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Set a photo or a video to be displayed here"
+            android:textColor="#FFE9C7"
+            android:textSize="13sp"
+            android:gravity="center" />
+    </LinearLayout>
+</FrameLayout>
