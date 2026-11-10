@@ -628,7 +628,7 @@ class MediaWidgetPlaybackService : Service() {
             val now = SystemClock.elapsedRealtime()
             var hasVideo = false
             ids.forEach { id ->
-                val name = prefs.getString("media_$id", null) ?: return@forEach
+                val name = prefs.getString("video_$id", null) ?: return@forEach
                 val file = File(File(filesDir, "widget_media"), name)
                 if (!file.isFile || !file.extension.equals("mp4", true)) return@forEach
                 hasVideo = true
@@ -640,7 +640,10 @@ class MediaWidgetPlaybackService : Service() {
                     MediaMetadataRetriever().apply { setDataSource(file.absolutePath) }
                 }
                 val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 1000L
-                val timestampUs = (((now - startedAt).coerceAtLeast(0L) % duration.coerceAtLeast(1L)) * 1000L)
+                val timestampMs = (now - startedAt).coerceAtLeast(0L) % duration.coerceAtLeast(1L)
+                prefs.edit().putLong("video_frame_$id", timestampMs).apply()
+                manager.notifyAppWidgetViewDataChanged(id, R.id.widget_media_stack)
+                val timestampUs = timestampMs * 1000L
                 val bitmap = runCatching { retriever.getFrameAtTime(timestampUs, MediaMetadataRetriever.OPTION_CLOSEST) }.getOrNull()
                 if (bitmap != null) {
                     val scale = minOf(1f, 480f / maxOf(bitmap.width, bitmap.height))
