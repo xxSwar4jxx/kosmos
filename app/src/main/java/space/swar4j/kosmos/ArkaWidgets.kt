@@ -1,6 +1,10 @@
 package space.swar4j.kosmos
 
 import android.app.Activity
+import android.app.Service
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -15,6 +19,8 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.RemoteViews
 import android.widget.TextView
+import android.widget.Spinner
+import android.widget.ArrayAdapter
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -122,6 +128,11 @@ class MediaWidgetConfigureActivity : Activity() {
             text = "Choose a photo or MP4 video for your Arka widget."
             textSize = 18f
         })
+        layout.addView(TextView(this).apply { text = "Video frame rate"; textSize = 15f; setPadding(0, 28, 0, 8) })
+        val fpsPicker = Spinner(this)
+        fpsPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("8 FPS", "12 FPS", "16 FPS"))
+        fpsPicker.setSelection(1)
+        layout.addView(fpsPicker)
         layout.addView(Button(this).apply {
             text = "Choose media"
             setOnClickListener {
@@ -142,7 +153,8 @@ class MediaWidgetConfigureActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != 41 || resultCode != RESULT_OK) { finish(); return }
         val uri = data?.data ?: run { finish(); return }
-        val extension = when (contentResolver.getType(uri)) {
+        val mime = contentResolver.getType(uri)
+        val extension = when (mime) {
             "video/mp4" -> "mp4"
             "image/png" -> "png"
             "image/webp" -> "webp"
@@ -152,11 +164,23 @@ class MediaWidgetConfigureActivity : Activity() {
         val target = File(directory, "widget_$widgetId.$extension")
         try {
             contentResolver.openInputStream(uri)?.use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+                target.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (extension == "mp4" && total > 10L * 1024L * 1024L) throw IllegalArgumentException("Videos must be 10 MB or smaller")
+                        output.write(buffer, 0, count)
+                    }
+                }
             } ?: throw IllegalStateException("Could not open selected media")
+            val fps = listOf(8, 12, 16)[fpsPicker.selectedItemPosition]
             getSharedPreferences("arka_media_widgets", MODE_PRIVATE).edit()
-                .putString("media_$widgetId", target.name).apply()
+                .putString("media_$widgetId", target.name).putInt("fps_$widgetId", fps).apply()
             MediaWidgetProvider.update(this, AppWidgetManager.getInstance(this), widgetId)
+            if (extension == "mp4") androidx.core.content.ContextCompat.startForegroundService(this, Intent(this, MediaWidgetPlaybackService::class.java))
             setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
         } catch (_: Exception) {
             setResult(RESULT_CANCELED)
@@ -202,4 +226,98 @@ class MediaWidgetViewerActivity : Activity() {
     }
 
     companion object { const val EXTRA_FILE = "arka_widget_file" }
+}
+
+
+class MediaWidgetPlaybackService : Service() {
+    private val handler = Handler(Looper.getMainLooper())
+    private val retrievers = mutableMapOf<Int, MediaMetadataRetriever>()
+    private val lastFrameAt = mutableMapOf<Int, Long>()
+    private val startedAt = SystemClock.elapsedRealtime()
+    private val tick = object : Runnable {
+        override fun run() {
+            val manager = AppWidgetManager.getInstance(this@MediaWidgetPlaybackService)
+            val ids = manager.getAppWidgetIds(ComponentName(this@MediaWidgetPlaybackService, MediaWidgetProvider::class.java))
+            val prefs = getSharedPreferences("arka_media_widgets", MODE_PRIVATE)
+            if (ids.isEmpty()) { stopSelf(); return }
+            val now = SystemClock.elapsedRealtime()
+            ids.forEach { id ->
+                val name = prefs.getString("media_$id", null) ?: return@forEach
+                val file = File(File(filesDir, "widget_media"), name)
+                if (!file.isFile || !file.extension.equals("mp4", true)) return@forEach
+                val fps = prefs.getInt("fps_$id", 12).coerceIn(8, 16)
+                val interval = 1000L / fps
+                if (now - (lastFrameAt[id] ?: 0L) < interval) return@forEach
+                lastFrameAt[id] = now
+                val retriever = retrievers.getOrPut(id) {
+                    MediaMetadataRetriever().apply { setDataSource(file.absolutePath) }
+                }
+                val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 1000L
+                val timestampUs = (((now - startedAt).coerceAtLeast(0L) % duration.coerceAtLeast(1L)) * 1000L)
+                val bitmap = runCatching { retriever.getFrameAtTime(timestampUs, MediaMetadataRetriever.OPTION_CLOSEST) }.getOrNull()
+                if (bitmap != null) {
+                    val scale = minOf(1f, 480f / maxOf(bitmap.width, bitmap.height))
+                    val output = if (scale < 1f) Bitmap.createScaledBitmap(bitmap,
+                        (bitmap.width * scale).toInt().coerceAtLeast(1),
+                        (bitmap.height * scale).toInt().coerceAtLeast(1), true) else bitmap
+                    val views = RemoteViews(packageName, R.layout.widget_media)
+                    views.setImageViewBitmap(R.id.widget_media_image, output)
+                    views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
+                    val open = PendingIntent.getActivity(this@MediaWidgetPlaybackService, id,
+                        Intent(this@MediaWidgetPlaybackService, MediaWidgetViewerActivity::class.java)
+                            .putExtra(MediaWidgetViewerActivity.EXTRA_FILE, file.absolutePath),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                    views.setOnClickPendingIntent(R.id.widget_media_root, open)
+                    manager.updateAppWidget(id, views)
+                    if (output !== bitmap) output.recycle()
+                    bitmap.recycle()
+                }
+            }
+            handler.postDelayed(this, 62L)
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        val channelId = "arka_widget_playback"
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            val channel = NotificationChannel(channelId, "Arka video widgets", NotificationManager.IMPORTANCE_LOW)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+        val stop = PendingIntent.getService(this, 9001,
+            Intent(this, MediaWidgetPlaybackService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val builder = if (android.os.Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId)
+            else Notification.Builder(this)
+        startForeground(9001, builder.setContentTitle("Arka video widget")
+            .setContentText("Animating your home-screen video widget")
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .addAction(Notification.Action.Builder(null, "Stop", stop).build())
+            .setOngoing(true).build())
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            handler.removeCallbacks(tick)
+            retrievers.values.forEach { runCatching { it.release() } }
+            retrievers.clear()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        handler.removeCallbacks(tick)
+        handler.post(tick)
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(tick)
+        retrievers.values.forEach { runCatching { it.release() } }
+        retrievers.clear()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    companion object { const val ACTION_STOP = "space.swar4j.kosmos.STOP_WIDGET_VIDEO" }
 }
