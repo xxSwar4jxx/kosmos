@@ -410,9 +410,10 @@ class MediaWidgetConfigureActivity : Activity() {
             alpha = 0.8f
             setPadding(0, 0, 0, 20)
         })
-        val currentName = prefs.getString("media_$widgetId", null)
+        val currentImages = prefs.getStringSet("images_$widgetId", emptySet()).orEmpty().size
+        val currentVideo = prefs.getString("video_$widgetId", null)
         content.addView(TextView(this).apply {
-            text = if (currentName == null) "No media selected" else "Current media: ${currentName.substringBeforeLast('.')}"
+            text = "Images: $currentImages / 10    •    Video: ${if (currentVideo == null) "none" else "added"}"
             textSize = 15f
             setTextColor(foreground)
             setPadding(16, 18, 16, 18)
