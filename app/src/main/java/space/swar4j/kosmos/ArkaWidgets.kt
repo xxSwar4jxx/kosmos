@@ -30,6 +30,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class PresetsWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -93,20 +96,15 @@ class MediaWidgetProvider : AppWidgetProvider() {
                     views.setImageViewBitmap(R.id.widget_media_image, bitmap)
                     views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
                 }
-                val viewIntent = Intent(context, MediaWidgetViewerActivity::class.java)
-                    .putExtra(MediaWidgetViewerActivity.EXTRA_FILE, file.absolutePath)
-                val open = PendingIntent.getActivity(context, id, viewIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                views.setOnClickPendingIntent(R.id.widget_media_root, open)
             } else {
                 views.setImageViewResource(R.id.widget_media_image, R.drawable.zerotech_logo)
                 views.setViewVisibility(R.id.widget_media_placeholder, View.VISIBLE)
-                val configure = Intent(context, MediaWidgetConfigureActivity::class.java)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                val choose = PendingIntent.getActivity(context, id, configure,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                views.setOnClickPendingIntent(R.id.widget_media_root, choose)
             }
+            val configure = Intent(context, MediaWidgetConfigureActivity::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            val openSettings = PendingIntent.getActivity(context, id, configure,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            views.setOnClickPendingIntent(R.id.widget_media_root, openSettings)
             manager.updateAppWidget(id, views)
         }
 
@@ -136,9 +134,26 @@ class MediaWidgetConfigureActivity : Activity() {
         })
         layout.addView(TextView(this).apply { text = "Video frame rate"; textSize = 15f; setPadding(0, 28, 0, 8) })
         fpsPicker = Spinner(this)
-        fpsPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("8 FPS", "12 FPS", "16 FPS"))
-        fpsPicker.setSelection(1)
+        val fpsOptions = listOf(8, 12, 16, 24, 30)
+        fpsPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, fpsOptions.map { "$it FPS" })
+        val savedFps = getSharedPreferences("arka_media_widgets", MODE_PRIVATE).getInt("fps_$widgetId", 12)
+        fpsPicker.setSelection(fpsOptions.indexOf(savedFps).takeIf { it >= 0 } ?: 1)
         layout.addView(fpsPicker)
+        layout.addView(Button(this).apply {
+            text = "Save settings"
+            setOnClickListener {
+                val fps = listOf(8, 12, 16, 24, 30)[fpsPicker.selectedItemPosition]
+                getSharedPreferences("arka_media_widgets", MODE_PRIVATE).edit().putInt("fps_$widgetId", fps).apply()
+                MediaWidgetProvider.update(this@MediaWidgetConfigureActivity, AppWidgetManager.getInstance(this@MediaWidgetConfigureActivity), widgetId)
+                val currentName = getSharedPreferences("arka_media_widgets", MODE_PRIVATE).getString("media_$widgetId", null)
+                if (currentName?.endsWith(".mp4", true) == true) {
+                    androidx.core.content.ContextCompat.startForegroundService(this@MediaWidgetConfigureActivity,
+                        Intent(this@MediaWidgetConfigureActivity, MediaWidgetPlaybackService::class.java))
+                }
+                setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
+                finish()
+            }
+        })
         layout.addView(Button(this).apply {
             text = "Choose media"
             setOnClickListener {
@@ -182,7 +197,7 @@ class MediaWidgetConfigureActivity : Activity() {
                     }
                 }
             } ?: throw IllegalStateException("Could not open selected media")
-            val fps = listOf(8, 12, 16)[fpsPicker.selectedItemPosition]
+            val fps = listOf(8, 12, 16, 24, 30)[fpsPicker.selectedItemPosition]
             getSharedPreferences("arka_media_widgets", MODE_PRIVATE).edit()
                 .putString("media_$widgetId", target.name).putInt("fps_$widgetId", fps).apply()
             MediaWidgetProvider.update(this, AppWidgetManager.getInstance(this), widgetId)
@@ -254,7 +269,7 @@ class MediaWidgetPlaybackService : Service() {
                 val file = File(File(filesDir, "widget_media"), name)
                 if (!file.isFile || !file.extension.equals("mp4", true)) return@forEach
                 hasVideo = true
-                val fps = prefs.getInt("fps_$id", 12).coerceIn(8, 16)
+                val fps = prefs.getInt("fps_$id", 12).coerceIn(8, 30)
                 val interval = 1000L / fps
                 if (now - (lastFrameAt[id] ?: 0L) < interval) return@forEach
                 lastFrameAt[id] = now
@@ -272,11 +287,11 @@ class MediaWidgetPlaybackService : Service() {
                     val views = RemoteViews(packageName, R.layout.widget_media)
                     views.setImageViewBitmap(R.id.widget_media_image, output)
                     views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
-                    val open = PendingIntent.getActivity(this@MediaWidgetPlaybackService, id,
-                        Intent(this@MediaWidgetPlaybackService, MediaWidgetViewerActivity::class.java)
-                            .putExtra(MediaWidgetViewerActivity.EXTRA_FILE, file.absolutePath),
+                    val configure = PendingIntent.getActivity(this@MediaWidgetPlaybackService, id,
+                        Intent(this@MediaWidgetPlaybackService, MediaWidgetConfigureActivity::class.java)
+                            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id),
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                    views.setOnClickPendingIntent(R.id.widget_media_root, open)
+                    views.setOnClickPendingIntent(R.id.widget_media_root, configure)
                     manager.updateAppWidget(id, views)
                     if (output !== bitmap) output.recycle()
                     bitmap.recycle()
