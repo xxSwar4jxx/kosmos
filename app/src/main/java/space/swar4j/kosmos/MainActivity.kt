@@ -418,7 +418,7 @@ private fun KosmosScreen(
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         enabled = hasInternet && !isSearchingOnline,
-                        placeholder = { Text("Search images and wallpapers") },
+                        placeholder = { Text("Search") },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { performOnlineSearch() })
                     )
@@ -431,20 +431,26 @@ private fun KosmosScreen(
                 }
             } else {
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.requiredWidth(LocalConfiguration.current.screenWidthDp.dp).offset(x = (-20).dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    contentAlignment = Alignment.CenterEnd
                 ) {
                     Image(
                         painter = painterResource(R.drawable.arka_banner),
                         contentDescription = "Arka by ZeroTech",
-                        modifier = Modifier.weight(1f).height(80.dp),
+                        modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
-                    IconButton(onClick = { showSearchScreen = true; tab = "Search" }, modifier = Modifier.size(56.dp)) {
-                        Icon(Icons.Outlined.Search, contentDescription = "Search wallpapers",
-                            tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(28.dp))
+                    IconButton(
+                        onClick = { showSearchScreen = true; tab = "Search" },
+                        modifier = Modifier.padding(end = 8.dp).size(56.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Search,
+                            contentDescription = "Search wallpapers",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -517,7 +523,15 @@ private fun KosmosScreen(
                                 }
                             }
                             item {
-                                SettingsGroup(title = "Content") {
+                                SettingsGroup(title = "Library") {
+                                    Text("Images selected from your gallery are copied into Arka, so they remain available in your library and presets.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    } else if (settingsSection == "Content") {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+                            item {
+                                SettingsGroup(title = "Search safety") {
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) {
                                             Text("Safe-for-work image search", style = MaterialTheme.typography.titleSmall)
@@ -527,14 +541,6 @@ private fun KosmosScreen(
                                     }
                                 }
                             }
-                            item {
-                                SettingsGroup(title = "Library") {
-                                    Text("Images selected from your gallery are copied into Arka, so they remain available in your library and presets.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-                        }
-                    } else if (settingsSection == "Content") {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                             item {
                                 SettingsGroup(title = "Preview preferences") {
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -554,15 +560,6 @@ private fun KosmosScreen(
                                             }
                                         )
                                     }
-                                }
-                            }
-                            item {
-                                SettingsGroup(title = "Content sources") {
-                                    Text(
-                                        "Arka's current image search remains safe-for-work. This preference is stored locally only; no blur, reveal, or content-rating behavior is connected yet.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
                             }
                         }
