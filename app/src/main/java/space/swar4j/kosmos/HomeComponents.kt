@@ -71,7 +71,12 @@ fun HomeActionCard(
 fun MiniWallpaperTile(
     wallpaper: StoredWallpaper,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onApply: () -> Unit = onClick,
+    onFavourite: () -> Unit = {},
+    onSavePreset: () -> Unit = {},
+    onRemove: () -> Unit = {},
+    favourite: Boolean = false
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Card(
@@ -93,6 +98,10 @@ fun MiniWallpaperTile(
                     }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         DropdownMenuItem(text = { Text("Open") }, onClick = { menuExpanded = false; onClick() })
+                        DropdownMenuItem(text = { Text("Apply") }, onClick = { menuExpanded = false; onApply() })
+                        DropdownMenuItem(text = { Text("Save to Presets") }, onClick = { menuExpanded = false; onSavePreset() })
+                        DropdownMenuItem(text = { Text(if (favourite) "Remove from Favourites" else "Favourite") }, onClick = { menuExpanded = false; onFavourite() })
+                        DropdownMenuItem(text = { Text("Remove") }, onClick = { menuExpanded = false; onRemove() })
                     }
                 }
             }

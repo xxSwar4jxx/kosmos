@@ -595,7 +595,27 @@ private fun KosmosScreen(
                                     MiniWallpaperTile(
                                         wallpaper = wallpaper,
                                         modifier = Modifier.weight(1f),
-                                        onClick = { selectedWallpaper = wallpaper }
+                                        onClick = { selectedWallpaper = wallpaper },
+                                        onApply = { selectedWallpaper = wallpaper; showApplyDialog = true },
+                                        onFavourite = {
+                                            metadata.setFavorite(wallpaper.file.name, !metadata.isFavorite(wallpaper.file.name))
+                                            favoriteVersion++
+                                        },
+                                        onSavePreset = {
+                                            metadata.setPreset(wallpaper.file.name, true)
+                                            favoriteVersion++
+                                            scope.launch { snackbarHostState.showSnackbar("Saved to Presets") }
+                                        },
+                                        onRemove = {
+                                            scope.launch {
+                                                runCatching {
+                                                    storage.deleteWallpaper(wallpaper.file)
+                                                    metadata.remove(wallpaper.file.name)
+                                                }.onSuccess { refreshLibrary(); snackbarHostState.showSnackbar("Wallpaper removed") }
+                                                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't remove wallpaper") }
+                                            }
+                                        },
+                                        favourite = metadata.isFavorite(wallpaper.file.name)
                                     )
                                 }
                                 if (favorites.size == 1) Spacer(Modifier.weight(1f))
@@ -617,7 +637,27 @@ private fun KosmosScreen(
                                     MiniWallpaperTile(
                                         wallpaper = wallpaper,
                                         modifier = Modifier.weight(1f),
-                                        onClick = { selectedWallpaper = wallpaper }
+                                        onClick = { selectedWallpaper = wallpaper },
+                                        onApply = { selectedWallpaper = wallpaper; showApplyDialog = true },
+                                        onFavourite = {
+                                            metadata.setFavorite(wallpaper.file.name, !metadata.isFavorite(wallpaper.file.name))
+                                            favoriteVersion++
+                                        },
+                                        onSavePreset = {
+                                            metadata.setPreset(wallpaper.file.name, true)
+                                            favoriteVersion++
+                                            scope.launch { snackbarHostState.showSnackbar("Saved to Presets") }
+                                        },
+                                        onRemove = {
+                                            scope.launch {
+                                                runCatching {
+                                                    storage.deleteWallpaper(wallpaper.file)
+                                                    metadata.remove(wallpaper.file.name)
+                                                }.onSuccess { refreshLibrary(); snackbarHostState.showSnackbar("Wallpaper removed") }
+                                                    .onFailure { snackbarHostState.showSnackbar(it.message ?: "Couldn't remove wallpaper") }
+                                            }
+                                        },
+                                        favourite = metadata.isFavorite(wallpaper.file.name)
                                     )
                                 }
                                 if (recent.size == 1) Spacer(Modifier.weight(1f))
