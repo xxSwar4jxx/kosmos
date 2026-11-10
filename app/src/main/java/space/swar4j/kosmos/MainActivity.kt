@@ -74,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Wallpaper
@@ -232,6 +233,7 @@ private fun KosmosScreen(
     var downloadingId by remember { mutableStateOf<String?>(null) }
     var favoriteVersion by remember { mutableIntStateOf(0) }
     var tab by rememberSaveable { mutableStateOf("Home") }
+    var showSearchScreen by rememberSaveable { mutableStateOf(false) }
     var showAddPresetDialog by remember { mutableStateOf(false) }
     var discoverResults by remember { mutableStateOf<List<OnlineWallpaperResult>>(emptyList()) }
     var discoverIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -399,51 +401,68 @@ private fun KosmosScreen(
         Column(
             modifier = Modifier.fillMaxSize().background(if (themeMode == "default") Brush.verticalGradient(listOf(Color(0xFF100B1B), Color(0xFF21101D), Color(0xFF39200F), Color(0xFF090A0D))) else Brush.verticalGradient(listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background))).padding(padding).padding(horizontal = 20.dp)
         ) {
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.requiredWidth(LocalConfiguration.current.screenWidthDp.dp).offset(x = (-20).dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.arka_banner),
-                    contentDescription = "Arka by ZeroTech",
-                    modifier = Modifier.weight(1f).height(80.dp),
-                    contentScale = ContentScale.Crop
-                )
-                OutlinedTextField(
-                    value = onlineQuery,
-                    onValueChange = { onlineQuery = it },
-                    modifier = Modifier.width(140.dp).height(56.dp),
-                    singleLine = true,
-                    enabled = hasInternet && !isSearchingOnline,
-                    placeholder = { Text("Search", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Color.Gray) },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { performOnlineSearch() }),
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            if (showSearchScreen) {
+                Spacer(Modifier.height(8.dp))
                 Row(
-                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Home", "Library", "Discover", "Presets", "Search").forEach { destination ->
-                        FilterChip(
-                            selected = tab == destination,
-                            onClick = { tab = destination },
-                            label = { Text(destination) }
-                        )
+                    IconButton(onClick = { showSearchScreen = false; tab = "Home" }) {
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
+                    }
+                    OutlinedTextField(
+                        value = onlineQuery,
+                        onValueChange = { onlineQuery = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        enabled = hasInternet && !isSearchingOnline,
+                        placeholder = { Text("Search images and wallpapers") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { performOnlineSearch() })
+                    )
+                    IconButton(
+                        onClick = { performOnlineSearch() },
+                        enabled = hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline
+                    ) {
+                        Icon(Icons.Outlined.Search, contentDescription = "Search")
                     }
                 }
-                IconButton(onClick = { tab = "Settings"; settingsSection = "General" }) {
-                    Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurface)
+            } else {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.requiredWidth(LocalConfiguration.current.screenWidthDp.dp).offset(x = (-20).dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.arka_banner),
+                        contentDescription = "Arka by ZeroTech",
+                        modifier = Modifier.weight(1f).height(80.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                    IconButton(onClick = { showSearchScreen = true; tab = "Search" }, modifier = Modifier.size(56.dp)) {
+                        Icon(Icons.Outlined.Search, contentDescription = "Search wallpapers",
+                            tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(28.dp))
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Home", "Library", "Discover", "Presets").forEach { destination ->
+                            FilterChip(selected = tab == destination, onClick = { tab = destination }, label = { Text(destination) })
+                        }
+                    }
+                    IconButton(onClick = { tab = "Settings"; settingsSection = "General" }) {
+                        Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurface)
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -975,7 +994,7 @@ private fun KosmosScreen(
                     }
                     isSearchingOnline && onlineResults.isEmpty() -> GhostWallpaperGrid(Modifier.weight(1f))
                     onlineResults.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("Search for something from the bar above.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Search for images and wallpapers on the internet", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
                     }
                     else -> {
                         Text("${onlineResults.size} results for “${onlineQuery}”",
