@@ -195,6 +195,7 @@ class MediaWidgetProvider : AppWidgetProvider() {
                 views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
                 val service = Intent(context, MediaWidgetRemoteViewsService::class.java)
                     .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    .setData(Uri.parse("content://space.swar4j.kosmos.widget/$id"))
                 views.setRemoteAdapter(R.id.widget_media_stack, service)
                 views.setEmptyView(R.id.widget_media_stack, R.id.widget_media_placeholder)
                 val click = Intent(context, MediaWidgetActionsActivity::class.java)
@@ -485,7 +486,10 @@ class MediaWidgetConfigureActivity : Activity() {
                 setOnClickListener { action() }
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 8 })
         }
-        actionButton("Choose photo or video", true) { openMediaPicker() }
+        actionButton("Manage photos", true) {
+            startActivity(Intent(this, MediaWidgetManageActivity::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
+        }
         actionButton("Save settings") {
             saveSettings()
         }
@@ -512,7 +516,7 @@ class MediaWidgetConfigureActivity : Activity() {
             .putInt("glow_color_$widgetId", colors[glowColorPicker.selectedItemPosition])
             .apply()
         MediaWidgetProvider.update(this, AppWidgetManager.getInstance(this), widgetId)
-        val currentName = getSharedPreferences("arka_media_widgets", MODE_PRIVATE).getString("media_$widgetId", null)
+        val currentName = getSharedPreferences("arka_media_widgets", MODE_PRIVATE).getString("video_$widgetId", null)
         if (currentName?.endsWith(".mp4", true) == true) {
             androidx.core.content.ContextCompat.startForegroundService(this,
                 Intent(this, MediaWidgetPlaybackService::class.java))
