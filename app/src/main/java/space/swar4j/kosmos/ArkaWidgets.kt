@@ -44,9 +44,13 @@ class PresetsWidgetProvider : AppWidgetProvider() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val file = File(File(context.filesDir, "wallpapers"), fileName)
-                StaticWallpaperApplier(context).apply(file, WallpaperDestination.HOME)
-                withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(context, "Wallpaper applied", android.widget.Toast.LENGTH_SHORT).show()
+                if (file.extension.lowercase() in setOf("gif", "mp4")) {
+                    LiveWallpaperLauncher(context).launch(file)
+                } else {
+                    StaticWallpaperApplier(context).apply(file, WallpaperDestination.HOME)
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Wallpaper applied", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
             } catch (_: Exception) {
                 withContext(Dispatchers.Main) {
@@ -71,7 +75,7 @@ class PresetsWidgetProvider : AppWidgetProvider() {
             val saved = context.getSharedPreferences("wallpaper_metadata", Context.MODE_PRIVATE)
                 .getStringSet("user_presets", emptySet()).orEmpty()
             val presets = directory.listFiles().orEmpty().filter {
-                it.isFile && (it.name.startsWith("preset_") || it.name in saved)
+                it.isFile && it.name in saved
             }.sortedBy { it.name }.take(8)
 
             val views = RemoteViews(context.packageName, R.layout.widget_presets)
