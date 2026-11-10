@@ -85,6 +85,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -436,6 +437,19 @@ private fun KosmosScreen(
                                 }
                             }
                             item {
+                                SettingsGroup(title = "Language preference") {
+                                    SettingsDropdown(
+                                        title = "App language",
+                                        selected = languagePreference.ifBlank { "en-GB" },
+                                        options = listOf("en-GB" to "English (UK)", "en-US" to "English (US)"),
+                                        onSelected = {
+                                            languagePreference = it
+                                            settings.edit { putString("language_preference", it) }
+                                        }
+                                    )
+                                }
+                            }
+                            item {
                                 SettingsGroup(title = "Wallpaper behavior") {
                                     SettingsDropdown(
                                         title = "Apply presets to",
@@ -636,7 +650,7 @@ private fun KosmosScreen(
                         FilterChip(
                             selected = filter == option,
                             onClick = { filter = option },
-                            label = { Text(option) }
+                            label = { Text(if (option == "Favorites") favouritesLabel else option) }
                         )
                     }
                 }
@@ -936,6 +950,29 @@ private fun KosmosScreen(
         }
     }
 
+    if (languagePreference.isBlank()) {
+        AlertDialog(
+            onDismissRequest = {
+                languagePreference = "en-GB"
+                settings.edit { putString("language_preference", "en-GB") }
+            },
+            title = { Text("Choose your language") },
+            text = { Text("Choose your preferred English spelling. You can change this later in General settings.") },
+            confirmButton = {
+                Column {
+                    TextButton(onClick = {
+                        languagePreference = "en-GB"
+                        settings.edit { putString("language_preference", "en-GB") }
+                    }) { Text("English (UK)") }
+                    TextButton(onClick = {
+                        languagePreference = "en-US"
+                        settings.edit { putString("language_preference", "en-US") }
+                    }) { Text("English (US)") }
+                }
+            }
+        )
+    }
+
     if (showAddPresetDialog) {
         AlertDialog(
             onDismissRequest = { showAddPresetDialog = false },
@@ -1209,7 +1246,7 @@ private fun WallpaperTile(
                             DropdownMenuItem(text = { Text("Rename") }, enabled = !wallpaper.isPreset,
                                 onClick = { menuExpanded = false; showRename = true })
                             DropdownMenuItem(text = { Text("Save to Presets") }, onClick = { menuExpanded = false; onSavePreset() })
-                            DropdownMenuItem(text = { Text(if (favorite) "Remove from Favorites" else "Favourite") },
+                            DropdownMenuItem(text = { Text(if (favorite) "Remove from ${if (languagePreference == "en-GB") "Favourites" else "Favorites"}" else "Favourite") },
                                 onClick = { menuExpanded = false; onFavorite() })
                             if (!wallpaper.isPreset) {
                                 DropdownMenuItem(text = { Text("Remove") }, onClick = { menuExpanded = false; onRemove() })
