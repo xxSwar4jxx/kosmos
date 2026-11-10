@@ -15,6 +15,10 @@ import android.graphics.BitmapFactory
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.SystemClock
+import android.os.IBinder
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -115,6 +119,7 @@ class MediaWidgetProvider : AppWidgetProvider() {
 }
 
 class MediaWidgetConfigureActivity : Activity() {
+    private lateinit var fpsPicker: Spinner
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -130,7 +135,7 @@ class MediaWidgetConfigureActivity : Activity() {
             textSize = 18f
         })
         layout.addView(TextView(this).apply { text = "Video frame rate"; textSize = 15f; setPadding(0, 28, 0, 8) })
-        val fpsPicker = Spinner(this)
+        fpsPicker = Spinner(this)
         fpsPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("8 FPS", "12 FPS", "16 FPS"))
         fpsPicker.setSelection(1)
         layout.addView(fpsPicker)
