@@ -33,35 +33,86 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PresetsWidgetProvider : AppWidgetProvider() {
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action != ACTION_APPLY_PRESET) return
+        val fileName = intent.getStringExtra(EXTRA_PRESET_FILE) ?: return
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val file = File(File(context.filesDir, "wallpapers"), fileName)
+                StaticWallpaperApplier(context).apply(file, WallpaperDestination.HOME)
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Wallpaper applied", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Couldn't apply this preset", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         ids.forEach { update(context, manager, it) }
     }
 
     companion object {
+        const val ACTION_APPLY_PRESET = "space.swar4j.kosmos.APPLY_PRESET_WIDGET"
+        const val EXTRA_PRESET_FILE = "preset_file"
+
         fun update(context: Context, manager: AppWidgetManager, id: Int) {
             val directory = File(context.filesDir, "wallpapers")
             val saved = context.getSharedPreferences("wallpaper_metadata", Context.MODE_PRIVATE)
                 .getStringSet("user_presets", emptySet()).orEmpty()
             val presets = directory.listFiles().orEmpty().filter {
                 it.isFile && (it.name.startsWith("preset_") || it.name in saved)
-            }.sortedBy { it.name }
-            val labels = presets.take(8).joinToString("\n") { file ->
-                when (file.nameWithoutExtension) {
-                    "preset_retro_prism" -> "Prism"
-                    "preset_retro_orbit" -> "Orbit"
-                    "preset_retro_spectrum" -> "Spectrum"
-                    "preset_retro_bluehour" -> "Blue Hour"
-                    else -> file.nameWithoutExtension.removePrefix("preset_").replace('_', ' ')
-                        .replace(Regex("\\b[a-z]")) { it.value.uppercase() }
-                }
-            }.ifBlank { "No presets saved yet" }
+            }.sortedBy { it.name }.take(8)
+
             val views = RemoteViews(context.packageName, R.layout.widget_presets)
-            views.setTextViewText(R.id.widget_preset_names, labels)
-            val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            views.setOnClickPendingIntent(R.id.widget_presets_root, open)
+            val buttonIds = intArrayOf(
+                R.id.widget_preset_1, R.id.widget_preset_2, R.id.widget_preset_3, R.id.widget_preset_4,
+                R.id.widget_preset_5, R.id.widget_preset_6, R.id.widget_preset_7, R.id.widget_preset_8
+            )
+            buttonIds.forEachIndexed { index, buttonId ->
+                val file = presets.getOrNull(index)
+                if (file == null) {
+                    views.setViewVisibility(buttonId, View.GONE)
+                } else {
+                    val rawName = file.nameWithoutExtension
+                    val cleanName = rawName
+                        .replace(Regex("[ _]?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}.*$"), "")
+                        .removePrefix("preset_")
+                        .replace('_', ' ')
+                        .trim()
+                    val label = when (cleanName.lowercase()) {
+                        "retro prism" -> "Prism"
+                        "retro orbit" -> "Orbit"
+                        "retro spectrum" -> "Spectrum"
+                        "retro bluehour" -> "Blue Hour"
+                        else -> cleanName.ifBlank { "Preset ${index + 1}" }
+                    }
+                    views.setTextViewText(buttonId, label)
+                    views.setViewVisibility(buttonId, View.VISIBLE)
+                    val apply = Intent(context, PresetsWidgetProvider::class.java)
+                        .setAction(ACTION_APPLY_PRESET)
+                        .putExtra(EXTRA_PRESET_FILE, file.name)
+                    val click = PendingIntent.getBroadcast(
+                        context, id * 10 + index, apply,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    views.setOnClickPendingIntent(buttonId, click)
+                }
+            }
+            views.setViewVisibility(
+                R.id.widget_preset_empty,
+                if (presets.isEmpty()) View.VISIBLE else View.GONE
+            )
             manager.updateAppWidget(id, views)
         }
 
