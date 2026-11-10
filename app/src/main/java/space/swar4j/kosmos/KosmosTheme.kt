@@ -24,7 +24,7 @@ private val AmberDark = darkColorScheme(
 )
 private val PureDark = darkColorScheme(
     primary = Color(0xFFFFD08A), onPrimary = Color(0xFF241600),
-    primaryContainer = Color(0xFF49300F), onPrimaryContainer = Color.White,
+    primaryContainer = Color(0xFF49300F), onPrimaryContainer = Color(0xFFFFE9C7),
     secondary = Color(0xFFE8C99A), onSecondary = Color(0xFF241600),
     background = Color.Black, onBackground = Color(0xFFFFE9C7),
     surface = Color(0xFF101010), onSurface = Color(0xFFFFE9C7),
