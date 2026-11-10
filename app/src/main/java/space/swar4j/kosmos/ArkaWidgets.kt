@@ -347,7 +347,7 @@ class MediaWidgetActionsActivity : Activity() {
             ?: prefs.getString("media_$id", null)
         val file = name?.let { File(File(filesDir, "widget_media"), it) }
         val exists = file?.isFile == true
-        val options = arrayOf("Manage photos", "Set as wallpaper", "Settings")
+        val options = arrayOf("Manage gallery", "Set as wallpaper", "Settings", "Remove")
         android.app.AlertDialog.Builder(this)
             .setTitle("Photo frame")
             .setItems(options) { _, which ->
@@ -355,9 +355,19 @@ class MediaWidgetActionsActivity : Activity() {
                     0 -> startActivity(Intent(this, MediaWidgetManageActivity::class.java)
                         .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id))
                     1 -> if (exists) applyWidgetWallpaper(file!!) else
-                        android.widget.Toast.makeText(this, "Choose a photo or video in Settings first", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(this, "Choose a photo or video first", android.widget.Toast.LENGTH_SHORT).show()
                     2 -> startActivity(Intent(this, MediaWidgetConfigureActivity::class.java)
                         .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id))
+                    3 -> if (exists) {
+                        file!!.delete()
+                        val images = prefs.getStringSet("images_$id", emptySet()).orEmpty().toMutableSet()
+                        images.remove(file.name)
+                        val edit = prefs.edit().putStringSet("images_$id", images)
+                        if (prefs.getString("video_$id", null) == file.name) edit.remove("video_$id")
+                        edit.apply()
+                        MediaWidgetProvider.update(this, AppWidgetManager.getInstance(this), id)
+                        android.widget.Toast.makeText(this, "Media removed from photo frame", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
                 finish()
             }
