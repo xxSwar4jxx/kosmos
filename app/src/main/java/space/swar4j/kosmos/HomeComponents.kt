@@ -18,6 +18,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -75,10 +78,13 @@ fun MiniWallpaperTile(
     onApply: () -> Unit = onClick,
     onFavourite: () -> Unit = {},
     onSavePreset: () -> Unit = {},
+    onRename: (String) -> Unit = {},
     onRemove: () -> Unit = {},
     favourite: Boolean = false
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameText by remember { mutableStateOf(wallpaper.title) }
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(18.dp),
@@ -100,6 +106,7 @@ fun MiniWallpaperTile(
                         DropdownMenuItem(text = { Text("Open") }, onClick = { menuExpanded = false; onClick() })
                         DropdownMenuItem(text = { Text("Apply") }, onClick = { menuExpanded = false; onApply() })
                         DropdownMenuItem(text = { Text("Save to Presets") }, onClick = { menuExpanded = false; onSavePreset() })
+                        DropdownMenuItem(text = { Text("Rename") }, onClick = { renameText = wallpaper.title; menuExpanded = false; showRenameDialog = true })
                         DropdownMenuItem(text = { Text(if (favourite) "Remove from Favourites" else "Favourite") }, onClick = { menuExpanded = false; onFavourite() })
                         DropdownMenuItem(text = { Text("Remove") }, onClick = { menuExpanded = false; onRemove() })
                     }
@@ -108,6 +115,15 @@ fun MiniWallpaperTile(
             Text(wallpaper.title, modifier = Modifier.padding(10.dp),
                 style = MaterialTheme.typography.titleSmall, maxLines = 1)
         }
+    }
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("Rename wallpaper") },
+            text = { OutlinedTextField(value = renameText, onValueChange = { renameText = it }, singleLine = true, label = { Text("Name") }) },
+            confirmButton = { TextButton(onClick = { val value = renameText.trim(); if (value.isNotEmpty()) onRename(value); showRenameDialog = false }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") } }
+        )
     }
 }
 
