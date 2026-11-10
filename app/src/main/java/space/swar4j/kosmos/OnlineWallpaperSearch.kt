@@ -110,7 +110,7 @@ class OnlineWallpaperSearch {
         // AniList permits only one paginated Page data field per query, so
         // anime media and direct character matches must be requested separately.
         val mediaQuery = """
-            query (${' {
+            query (${'$'}search: String) {
               Page(perPage: 10) {
                 media(search: ${'$'}search, type: ANIME, isAdult: false) {
                   title { romaji english }
