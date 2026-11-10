@@ -162,10 +162,8 @@ class MediaWidgetProvider : AppWidgetProvider() {
                 val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
                 val count = mediaFiles(context, id).size
                 if (count > 1) {
-                    val next = (prefs.getInt("index_$id", 0) + 1) % count
-                    prefs.edit().putInt("index_$id", next).apply()
                     val views = RemoteViews(context.packageName, R.layout.widget_media)
-                    views.setDisplayedChild(R.id.widget_media_stack, next)
+                    views.showNext(R.id.widget_media_stack)
                     AppWidgetManager.getInstance(context).partiallyUpdateAppWidget(id, views)
                 }
                 scheduleAdvance(context, id)
