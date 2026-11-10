@@ -188,10 +188,29 @@ class MediaWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
             val files = mediaFiles(context, id)
             val views = RemoteViews(context.packageName, R.layout.widget_media)
+            val placeholderClick = PendingIntent.getActivity(
+                context, id + 8500,
+                Intent(context, MediaWidgetManageActivity::class.java)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_media_placeholder, placeholderClick)
             if (files.isEmpty()) {
                 views.setViewVisibility(R.id.widget_media_placeholder, View.VISIBLE)
+                views.setViewVisibility(R.id.widget_media_stack, View.GONE)
+                val theme = context.getSharedPreferences("arka_settings", Context.MODE_PRIVATE)
+                    .getString("theme_mode", "default") ?: "default"
+                val (bg, fg) = when (theme) {
+                    "light" -> 0xFFF7F7F7.toInt() to 0xFF202124.toInt()
+                    "forest" -> 0xFF07140D.toInt() to 0xFFE2F3E4.toInt()
+                    "dark" -> 0xFF000000.toInt() to 0xFFFFE9C7.toInt()
+                    else -> 0xFF090A0D.toInt() to 0xFFFFE9C7.toInt()
+                }
+                views.setInt(R.id.widget_media_placeholder, "setBackgroundColor", bg)
+                views.setTextColor(R.id.widget_media_placeholder_text, fg)
             } else {
                 views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
+                views.setViewVisibility(R.id.widget_media_stack, View.VISIBLE)
                 val service = Intent(context, MediaWidgetRemoteViewsService::class.java)
                     .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
                     .setData(Uri.parse("content://space.swar4j.kosmos.widget/$id"))
