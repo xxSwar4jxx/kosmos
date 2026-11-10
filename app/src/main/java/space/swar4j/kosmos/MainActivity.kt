@@ -84,6 +84,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -240,6 +241,8 @@ private fun KosmosScreen(
     var blurNonExplicitSensitivePreviews by rememberSaveable {
         mutableStateOf(settings.getBoolean("blur_non_explicit_sensitive_previews", true))
     }
+    var languagePreference by rememberSaveable { mutableStateOf(settings.getString("language_preference", "") ?: "") }
+    val favouritesLabel = if (languagePreference == "en-GB") "Favourites" else "Favorites"
 
     val performOnlineSearch: () -> Unit = {
         if (hasInternet && onlineQuery.isNotBlank() && !isSearchingOnline) {
@@ -359,19 +362,19 @@ private fun KosmosScreen(
         containerColor = Color.Transparent
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF100B1B), Color(0xFF21101D), Color(0xFF39200F), Color(0xFF090A0D)))).padding(padding).padding(horizontal = 20.dp)
+            modifier = Modifier.fillMaxSize().background(if (themeMode == "default") Brush.verticalGradient(listOf(Color(0xFF100B1B), Color(0xFF21101D), Color(0xFF39200F), Color(0xFF090A0D))) else Brush.verticalGradient(listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background))).padding(padding).padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(12.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(1.125f).offset(x = (-20).dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
                     painter = painterResource(R.drawable.arka_banner),
                     contentDescription = "Arka by ZeroTech",
-                    modifier = Modifier.weight(1f).height(100.dp),
-                    contentScale = ContentScale.Fit
+                    modifier = Modifier.weight(1f).height(80.dp),
+                    contentScale = ContentScale.Crop
                 )
                 OutlinedTextField(
                     value = onlineQuery,
@@ -379,7 +382,8 @@ private fun KosmosScreen(
                     modifier = Modifier.width(140.dp).height(56.dp),
                     singleLine = true,
                     enabled = hasInternet && !isSearchingOnline,
-                    placeholder = { Text("SEARCH") },
+                    placeholder = { Text("Search", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Color.Gray) },
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { performOnlineSearch() }),
                 )
@@ -395,7 +399,7 @@ private fun KosmosScreen(
                     modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Home", "Library", "Discover", "Presets").forEach { destination ->
+                    listOf("Home", "Library", "Discover", "Presets", "Search").forEach { destination ->
                         FilterChip(
                             selected = tab == destination,
                             onClick = { tab = destination },
@@ -426,7 +430,7 @@ private fun KosmosScreen(
                                     SettingsDropdown(
                                         title = "Theme",
                                         selected = themeMode,
-                                        options = listOf("default" to "Default (Amber)", "light" to "Light", "dark" to "Dark", "system" to "Follow system"),
+                                        options = listOf("default" to "Default (Amber)", "light" to "Light", "dark" to "Dark", "forest" to "Forest", "system" to "Follow system"),
                                         onSelected = onThemeModeChange
                                     )
                                 }
@@ -514,7 +518,7 @@ private fun KosmosScreen(
                                 }
                             }
                             item {
-                                Text("Arka · Made by ZeroTech", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Arka © ZeroTech", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -562,7 +566,7 @@ private fun KosmosScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Favorites", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                            Text(favouritesLabel, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                             TextButton(onClick = { tab = "Library"; filter = "Favorites" }) { Text("View all") }
                         }
                         val favorites = wallpapers.filter { metadata.isFavorite(it.file.name) }.take(2)
