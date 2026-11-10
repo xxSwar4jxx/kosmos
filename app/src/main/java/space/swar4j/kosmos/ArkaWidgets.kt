@@ -85,6 +85,7 @@ class PresetsWidgetProvider : AppWidgetProvider() {
                 it.isFile && it.name in saved
             }.sortedBy { it.name }.take(8)
 
+            val views = RemoteViews(context.packageName, R.layout.widget_presets)
             val theme = context.getSharedPreferences("arka_settings", Context.MODE_PRIVATE)
                 .getString("theme_mode", "default") ?: "default"
             val (surfaceColor, buttonColor, textColor) = when (theme) {
@@ -305,7 +306,7 @@ class MediaWidgetFactory(private val context: Context, private val widgetId: Int
         }
         canvas.drawBitmap(source,pad.toFloat(),pad.toFloat(),Paint(Paint.ANTI_ALIAS_FLAG))
         if(border>0) {
-            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=selected; style=Paint.Style.STROKE; strokeWidth=border }
+            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color=selected; style=Paint.Style.STROKE; strokeWidth=border }
             canvas.drawRoundRect(RectF(pad+border/2,pad+border/2,pad+width-border/2,pad+height-border/2),8f,8f,paint)
         }
         return output
