@@ -9,7 +9,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:loopViews="true"
-        android:animateFirstView="true" />
+        android:animateFirstView="true"
+        android:visibility="gone" />
     <ImageView
         android:id="@+id/widget_media_image"
         android:layout_width="1dp"
