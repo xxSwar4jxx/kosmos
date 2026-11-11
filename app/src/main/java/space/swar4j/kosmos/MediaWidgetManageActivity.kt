@@ -19,12 +19,12 @@ class MediaWidgetManageActivity : Activity() {
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24) }
         root.addView(TextView(this).apply { text = "Manage photos"; textSize = 24f })
-        root.addView(TextView(this).apply { text = "Add up to 10 images and one looping MP4 video."; textSize = 14f; setPadding(0,12,0,16) })
+        root.addView(TextView(this).apply { text = "Choose one mode per frame: up to 10 images, or one looping MP4 video."; textSize = 14f; setPadding(0,12,0,16) })
         summary = TextView(this).apply { textSize = 15f; setPadding(12,12,12,12) }
         root.addView(summary)
         fun button(label: String, action: () -> Unit) { root.addView(Button(this).apply { text = label; setOnClickListener { action() } }, LinearLayout.LayoutParams(-1,-2)) }
-        button("Add images") { pick(false) }
-        button("Add or replace video") { pick(true) }
+        button("Use images (replaces video)") { pick(false) }
+        button("Use one video (replaces images)") { pick(true) }
         button("Remove media") { removeMedia() }
         button("Done") { finish() }
         setContentView(ScrollView(this).apply { addView(root) })
@@ -76,9 +76,12 @@ class MediaWidgetManageActivity : Activity() {
                 val target = File(dir, "widget_video_$widgetId.mp4")
                 contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { input.copyTo(it) } } ?: return
                 if (target.length() > 10L * 1024L * 1024L) { target.delete(); throw IllegalArgumentException("Video must be 10 MB or smaller") }
-                prefs.edit().putString("video_$widgetId", target.name).apply()
+                prefs.getStringSet("images_$widgetId", emptySet()).orEmpty().forEach { File(dir, it).delete() }
+                prefs.edit().remove("images_$widgetId").putString("video_$widgetId", target.name).apply()
                 androidx.core.content.ContextCompat.startForegroundService(this, Intent(this, MediaWidgetPlaybackService::class.java))
             } else if (requestCode == 61) {
+                prefs.getString("video_$widgetId", null)?.let { File(dir, it).delete() }
+                prefs.edit().remove("video_$widgetId").apply()
                 val images = prefs.getStringSet("images_$widgetId", emptySet()).orEmpty().toMutableSet()
                 for (uri in uris) {
                     if (images.size >= 10) break
