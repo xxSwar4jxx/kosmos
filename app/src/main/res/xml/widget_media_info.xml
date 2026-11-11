@@ -7,6 +7,5 @@
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_media"
-    android:configure="space.swar4j.kosmos.MediaWidgetConfigureActivity"
     android:widgetCategory="home_screen"
     android:description="@string/widget_media_description" />
