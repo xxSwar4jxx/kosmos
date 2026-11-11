@@ -281,10 +281,10 @@ class MediaWidgetFactory(private val context: Context, private val widgetId: Int
         } else BitmapFactory.decodeFile(file.absolutePath)
         val views = RemoteViews(context.packageName, R.layout.widget_media_item)
         if (bitmap != null) {
+            // RemoteViews serializes the bitmap after getViewAt returns. Recycling it here
+            // invalidates the image before the launcher can render the collection item.
             val styled = styleFrame(bitmap, prefs)
             views.setImageViewBitmap(R.id.widget_media_item_image, styled)
-            if (styled !== bitmap) styled.recycle()
-            bitmap.recycle()
         }
         views.setOnClickFillInIntent(R.id.widget_media_item_image,
             Intent().putExtra(MediaWidgetActionsActivity.EXTRA_SELECTED_FILE, file.name))
