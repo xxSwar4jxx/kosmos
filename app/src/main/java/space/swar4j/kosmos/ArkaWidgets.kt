@@ -196,6 +196,7 @@ class MediaWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_media_placeholder, placeholderClick)
             if (files.isEmpty()) {
+                views.setOnClickPendingIntent(R.id.widget_media_root, placeholderClick)
                 views.setViewVisibility(R.id.widget_media_placeholder, View.VISIBLE)
                 views.setViewVisibility(R.id.widget_media_stack, View.GONE)
                 val theme = context.getSharedPreferences("arka_settings", Context.MODE_PRIVATE)
@@ -211,6 +212,15 @@ class MediaWidgetProvider : AppWidgetProvider() {
             } else {
                 views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
                 views.setViewVisibility(R.id.widget_media_stack, View.VISIBLE)
+                // Fallback click on the widget surface must open the Arka photo-frame
+                // actions, never the app's launcher activity.
+                val rootAction = Intent(context, MediaWidgetActionsActivity::class.java)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                val rootClick = PendingIntent.getActivity(
+                    context, id + 9500, rootAction,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.widget_media_root, rootClick)
                 val service = Intent(context, MediaWidgetRemoteViewsService::class.java)
                     .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
                     .setData(Uri.parse("content://space.swar4j.kosmos.widget/$id"))
