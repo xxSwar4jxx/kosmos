@@ -149,6 +149,13 @@ class PresetsWidgetProvider : AppWidgetProvider() {
 class MediaWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         ids.forEach { update(context, manager, it) }
+        val hasVideo = ids.any { id ->
+            context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
+                .getString("video_$id", null) != null
+        }
+        if (hasVideo) androidx.core.content.ContextCompat.startForegroundService(
+            context, Intent(context, MediaWidgetPlaybackService::class.java)
+        )
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -624,16 +631,24 @@ class MediaWidgetPlaybackService : Service() {
                 }
                 val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 1000L
                 val timestampMs = (now - startedAt).coerceAtLeast(0L) % duration.coerceAtLeast(1L)
-                val frame = runCatching {
+                val decoded = runCatching {
                     retriever.getFrameAtTime(timestampMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
                 }.getOrNull()
-                if (frame != null) {
+                if (decoded != null) {
+                    val maxEdge = 720
+                    val scale = minOf(1f, maxEdge.toFloat() / maxOf(decoded.width, decoded.height))
+                    val frame = if (scale < 1f) Bitmap.createScaledBitmap(
+                        decoded, (decoded.width * scale).toInt().coerceAtLeast(1),
+                        (decoded.height * scale).toInt().coerceAtLeast(1), true
+                    ) else decoded
                     val views = RemoteViews(packageName, R.layout.widget_media)
                     views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
                     views.setViewVisibility(R.id.widget_media_stack, View.GONE)
                     views.setViewVisibility(R.id.widget_media_image, View.VISIBLE)
                     views.setImageViewBitmap(R.id.widget_media_image, frame)
                     manager.updateAppWidget(id, views)
+                    if (frame !== decoded) frame.recycle()
+                    decoded.recycle()
                 }
 
             }
