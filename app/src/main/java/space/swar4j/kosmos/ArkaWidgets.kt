@@ -365,173 +365,186 @@ class MediaWidgetConfigureActivity : Activity() {
     private lateinit var fpsPicker: Spinner
     private lateinit var intervalPicker: Spinner
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+    private var backgroundColor = Color.BLACK
+    private var surfaceColor = Color.DKGRAY
+    private var foregroundColor = Color.WHITE
+    private var secondaryColor = 0xFFB0B0B0.toInt()
+    private var accentColor = 0xFFFFB547.toInt()
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         setResult(RESULT_CANCELED)
         val prefs = getSharedPreferences("arka_media_widgets", MODE_PRIVATE)
-        val theme = getSharedPreferences("arka_settings", MODE_PRIVATE).getString("theme_mode", "default") ?: "default"
-        val (background, surface, foreground, accent) = when (theme) {
-            "light" -> intArrayOf(0xFFF7F7F7.toInt(), 0xFFFFFFFF.toInt(), 0xFF202124.toInt(), 0xFF3867D6.toInt())
-            "forest" -> intArrayOf(0xFF07140D.toInt(), 0xFF10251A.toInt(), 0xFFE2F3E4.toInt(), 0xFF9BCB9D.toInt())
-            "dark" -> intArrayOf(0xFF000000.toInt(), 0xFF101010.toInt(), 0xFFFFE9C7.toInt(), 0xFFFFD08A.toInt())
-            else -> intArrayOf(0xFF090A0D.toInt(), 0xFF15171C.toInt(), 0xFFFFE9C7.toInt(), 0xFFFFB547.toInt())
+        val theme = getSharedPreferences("arka_settings", MODE_PRIVATE)
+            .getString("theme_mode", "default") ?: "default"
+        val colors = when (theme) {
+            "light" -> intArrayOf(0xFFF5F5F5.toInt(), 0xFFFFFFFF.toInt(), 0xFF202124.toInt(), 0xFF686868.toInt(), 0xFF3867D6.toInt())
+            "forest" -> intArrayOf(0xFF07140D.toInt(), 0xFF10251A.toInt(), 0xFFE2F3E4.toInt(), 0xFFAAC9AE.toInt(), 0xFF9BCB9D.toInt())
+            "dark" -> intArrayOf(Color.BLACK, 0xFF151515.toInt(), 0xFFFFE9C7.toInt(), 0xFFC8BBA8.toInt(), 0xFFFFD08A.toInt())
+            else -> intArrayOf(0xFF090A0D.toInt(), 0xFF15171C.toInt(), 0xFFFFE9C7.toInt(), 0xFFC9B99F.toInt(), 0xFFFFB547.toInt())
         }
+        backgroundColor = colors[0]
+        surfaceColor = colors[1]
+        foregroundColor = colors[2]
+        secondaryColor = colors[3]
+        accentColor = colors[4]
+
+        fun text(value: String, size: Float, color: Int = foregroundColor, bold: Boolean = false): TextView =
+            TextView(this).apply {
+                this.text = value
+                textSize = size
+                setTextColor(color)
+                if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+                includeFontPadding = true
+            }
+
+        fun card(): LinearLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(surfaceColor)
+                cornerRadius = dp(20).toFloat()
+            }
+        }
+
+        fun sectionLabel(value: String): TextView = text(value.uppercase(), 12f, accentColor, true).apply {
+            letterSpacing = 0.08f
+            setPadding(0, 0, 0, dp(10))
+        }
+
+        fun styledSpinner(items: List<String>, selected: Int): Spinner {
+            val spinner = Spinner(this)
+            val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
+                override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                    return (super.getView(position, convertView, parent) as TextView).apply {
+                        setTextColor(foregroundColor)
+                        textSize = 16f
+                        setPadding(dp(12), dp(10), dp(12), dp(10))
+                    }
+                }
+                override fun getDropDownView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                    return (super.getDropDownView(position, convertView, parent) as TextView).apply {
+                        setTextColor(foregroundColor)
+                        setBackgroundColor(surfaceColor)
+                        textSize = 16f
+                        setPadding(dp(16), dp(12), dp(16), dp(12))
+                    }
+                }
+            }
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
+            spinner.setSelection(selected.coerceIn(items.indices))
+            spinner.backgroundTintList = android.content.res.ColorStateList.valueOf(accentColor)
+            return spinner
+        }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
-            setBackgroundColor(background)
+            setBackgroundColor(backgroundColor)
         }
-        val scroll = android.widget.ScrollView(this)
+        val scroll = android.widget.ScrollView(this).apply { clipToPadding = false }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(4, 8, 4, 20)
+            setPadding(dp(22), dp(24), dp(22), dp(20))
         }
-        content.addView(TextView(this).apply {
-            text = "Photo frame settings"
-            textSize = 25f
-            setTextColor(foreground)
-            setPadding(0, 4, 0, 8)
+
+        content.addView(text("Photo frame", 28f, foregroundColor, true))
+        content.addView(text("Personalise how your home-screen frame displays media.", 14f, secondaryColor).apply {
+            setPadding(0, dp(6), 0, dp(22))
         })
-        content.addView(TextView(this).apply {
-            text = "Choose what appears in your home-screen frame and how videos animate."
-            textSize = 14f
-            setTextColor(foreground)
-            alpha = 0.8f
-            setPadding(0, 0, 0, 20)
-        })
-        val currentImages = prefs.getStringSet("images_$widgetId", emptySet()).orEmpty().size
-        val currentVideo = prefs.getString("video_$widgetId", null)
-        content.addView(TextView(this).apply {
-            text = "Images: $currentImages / 10    •    Video: ${if (currentVideo == null) "none" else "added"}"
-            textSize = 15f
-            setTextColor(foreground)
-            setPadding(16, 18, 16, 18)
-            setBackgroundColor(surface)
-        })
-        content.addView(TextView(this).apply {
-            text = "VIDEO FRAME RATE"
-            textSize = 12f
-            setTextColor(accent)
-            setPadding(0, 24, 0, 8)
-        })
-        fpsPicker = Spinner(this)
+
+        val images = prefs.getStringSet("images_$widgetId", emptySet()).orEmpty()
+        val video = prefs.getString("video_$widgetId", null)
+        val statusCard = card()
+        statusCard.addView(sectionLabel("Current media"))
+        statusCard.addView(text(
+            when {
+                video != null -> "Video frame"
+                images.isNotEmpty() -> "Photo collection"
+                else -> "Nothing added yet"
+            }, 18f, foregroundColor, true
+        ))
+        statusCard.addView(text(
+            when {
+                video != null -> "1 looping video is selected"
+                images.isNotEmpty() -> "${images.size} of 10 photos added"
+                else -> "Add photos or a video from Manage media."
+            }, 14f, secondaryColor
+        ).apply { setPadding(0, dp(5), 0, 0) })
+        content.addView(statusCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+
+        val videoCard = card()
+        videoCard.addView(sectionLabel("Video playback"))
+        videoCard.addView(text("Frame rate", 16f, foregroundColor, true))
+        videoCard.addView(text("Higher FPS makes motion smoother but may use more battery.", 13f, secondaryColor)
+            .apply { setPadding(0, dp(4), 0, dp(8)) })
         val fpsOptions = listOf(8, 12, 16, 24, 30)
-        fpsPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, fpsOptions.map { "$it FPS" })
-        val savedFps = prefs.getInt("fps_$widgetId", 12)
-        fpsPicker.setSelection(fpsOptions.indexOf(savedFps).takeIf { it >= 0 } ?: 1)
-        content.addView(fpsPicker)
-        content.addView(TextView(this).apply {
-            text = "AUTO SCROLL INTERVAL"
-            textSize = 12f
-            setTextColor(accent)
-            setPadding(0, 20, 0, 8)
-        })
-        intervalPicker = Spinner(this)
+        fpsPicker = styledSpinner(fpsOptions.map { "$it FPS" },
+            fpsOptions.indexOf(prefs.getInt("fps_$widgetId", 12)).let { if (it < 0) 1 else it })
+        videoCard.addView(fpsPicker, LinearLayout.LayoutParams(-1, -2))
+        content.addView(videoCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+
+        val rotationCard = card()
+        rotationCard.addView(sectionLabel("Photo rotation"))
+        rotationCard.addView(text("Auto-cycle interval", 16f, foregroundColor, true))
+        rotationCard.addView(text("Choose how long each photo stays visible. You can also swipe the widget manually.", 13f, secondaryColor)
+            .apply { setPadding(0, dp(4), 0, dp(8)) })
         val intervalLabels = listOf("10 seconds", "30 seconds", "1 minute", "2 minutes", "5 minutes", "10 minutes", "30 minutes", "1 day")
-        intervalPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, intervalLabels)
         val intervalValues = listOf(10000L, 30000L, 60000L, 120000L, 300000L, 600000L, 1800000L, 86400000L)
-        intervalPicker.setSelection(intervalValues.indexOf(prefs.getLong("interval_$widgetId", 30000L)).coerceAtLeast(0))
-        content.addView(intervalPicker)
-        content.addView(TextView(this).apply {
-            text = "Higher frame rates may use more battery and launcher resources."
-            textSize = 12f
-            setTextColor(foreground)
-            alpha = 0.7f
-            setPadding(0, 6, 0, 20)
-        })
-        fun actionButton(label: String, filled: Boolean = false, action: () -> Unit) {
-            content.addView(Button(this).apply {
+        intervalPicker = styledSpinner(intervalLabels,
+            intervalValues.indexOf(prefs.getLong("interval_$widgetId", 30000L)).coerceAtLeast(0))
+        rotationCard.addView(intervalPicker, LinearLayout.LayoutParams(-1, -2))
+        content.addView(rotationCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(20) })
+
+        fun actionButton(label: String, filled: Boolean, action: () -> Unit) {
+            val button = Button(this).apply {
                 text = label
-                setTextColor(if (filled) background else foreground)
-                if (android.os.Build.VERSION.SDK_INT >= 21) backgroundTintList =
-                    android.content.res.ColorStateList.valueOf(if (filled) accent else surface)
+                isAllCaps = false
+                textSize = 15f
+                setTextColor(if (filled) backgroundColor else foregroundColor)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(if (filled) accentColor else surfaceColor)
                 setOnClickListener { action() }
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 8 })
+            }
+            content.addView(button, LinearLayout.LayoutParams(-1, dp(52)).apply { bottomMargin = dp(10) })
         }
-        actionButton("Manage photos", true) {
+        actionButton("Manage media", false) {
+            savePreferencesOnly()
             startActivity(Intent(this, MediaWidgetManageActivity::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
         }
-        actionButton("Save settings") {
-            saveSettings()
-        }
-        actionButton("Done") {
-            saveSettings()
-            finish()
-        }
+        actionButton("Save settings", true) { saveSettings(); finish() }
+        content.addView(text("Arka · ZeroTech", 12f, secondaryColor).apply {
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, dp(10), 0, 0)
+        })
+
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
 
-    private fun saveSettings() {
+    private fun savePreferencesOnly() {
         val fps = listOf(8, 12, 16, 24, 30)[fpsPicker.selectedItemPosition]
         val intervals = listOf(10000L, 30000L, 60000L, 120000L, 300000L, 600000L, 1800000L, 86400000L)
         getSharedPreferences("arka_media_widgets", MODE_PRIVATE).edit()
             .putInt("fps_$widgetId", fps)
             .putLong("interval_$widgetId", intervals[intervalPicker.selectedItemPosition])
             .apply()
+    }
+
+    private fun saveSettings() {
+        savePreferencesOnly()
         MediaWidgetProvider.update(this, AppWidgetManager.getInstance(this), widgetId)
-        val currentName = getSharedPreferences("arka_media_widgets", MODE_PRIVATE).getString("video_$widgetId", null)
+        val currentName = getSharedPreferences("arka_media_widgets", MODE_PRIVATE)
+            .getString("video_$widgetId", null)
         if (currentName?.endsWith(".mp4", true) == true) {
             androidx.core.content.ContextCompat.startForegroundService(this,
                 Intent(this, MediaWidgetPlaybackService::class.java))
         }
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
-    }
-
-    private fun openMediaPicker() {
-        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/mp4"))
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        }
-        startActivityForResult(picker, 41)
-    }
-
-    @Deprecated("Used for the widget media picker result")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != 41 || resultCode != RESULT_OK) return
-        val uri = data?.data ?: return
-        val mime = contentResolver.getType(uri)
-        val extension = when (mime) {
-            "video/mp4" -> "mp4"
-            "image/png" -> "png"
-            "image/webp" -> "webp"
-            "image/gif" -> "gif"
-            else -> "jpg"
-        }
-        val directory = File(filesDir, "widget_media").apply { mkdirs() }
-        val target = File(directory, "widget_$widgetId.$extension")
-        try {
-            contentResolver.openInputStream(uri)?.use { input ->
-                target.outputStream().use { output ->
-                    val buffer = ByteArray(8192)
-                    var total = 0L
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        total += count
-                        if (extension == "mp4" && total > 10L * 1024L * 1024L) throw IllegalArgumentException("Videos must be 10 MB or smaller")
-                        output.write(buffer, 0, count)
-                    }
-                }
-            } ?: throw IllegalStateException("Could not open selected media")
-            val fps = listOf(8, 12, 16, 24, 30)[fpsPicker.selectedItemPosition]
-            getSharedPreferences("arka_media_widgets", MODE_PRIVATE).edit()
-                .putString("media_$widgetId", target.name).putInt("fps_$widgetId", fps).apply()
-            MediaWidgetProvider.update(this, AppWidgetManager.getInstance(this), widgetId)
-            if (extension == "mp4") androidx.core.content.ContextCompat.startForegroundService(this,
-                Intent(this, MediaWidgetPlaybackService::class.java))
-            setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
-            recreate()
-        } catch (error: Exception) {
-            android.widget.Toast.makeText(this, error.message ?: "Couldn't load selected media", android.widget.Toast.LENGTH_LONG).show()
-        }
     }
 }
 
