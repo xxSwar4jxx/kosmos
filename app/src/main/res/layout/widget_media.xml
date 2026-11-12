@@ -3,7 +3,7 @@
     android:id="@+id/widget_media_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#101010">
+    android:background="@android:color/transparent">
     <StackView
         android:id="@+id/widget_media_stack"
         android:layout_width="match_parent"
@@ -12,12 +12,16 @@
         android:animateFirstView="false"
         android:padding="0dp"
         android:clipToPadding="false"
-        android:visibility="gone" />
+        android:visibility="gone"
+        android:background="@android:color/transparent" />
     <ImageView
         android:id="@+id/widget_media_image"
-        android:layout_width="1dp"
-        android:layout_height="1dp"
-        android:visibility="gone" />
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:adjustViewBounds="false"
+        android:visibility="gone"
+        android:contentDescription="Photo frame video" />
     <LinearLayout
         android:id="@+id/widget_media_placeholder"
         android:layout_width="match_parent"
