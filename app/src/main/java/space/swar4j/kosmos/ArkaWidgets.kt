@@ -207,29 +207,29 @@ class MediaWidgetProvider : AppWidgetProvider() {
                 views.setTextColor(R.id.widget_media_placeholder_text, fg)
             } else {
                 views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
-                views.setViewVisibility(R.id.widget_media_stack, View.VISIBLE)
-                // Fallback click on the widget surface must open the Arka photo-frame
-                // actions, never the app's launcher activity.
-                val rootAction = Intent(context, MediaWidgetActionsActivity::class.java)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                val rootClick = PendingIntent.getActivity(
-                    context, id + 9500, rootAction,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.widget_media_root, rootClick)
-                val service = Intent(context, MediaWidgetRemoteViewsService::class.java)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                    .setData(Uri.parse("content://space.swar4j.kosmos.widget/$id"))
-                views.setRemoteAdapter(R.id.widget_media_stack, service)
-                views.setEmptyView(R.id.widget_media_stack, R.id.widget_media_placeholder)
-                val click = Intent(context, MediaWidgetActionsActivity::class.java)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                val template = PendingIntent.getActivity(context, id + 5000, click,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
-                views.setPendingIntentTemplate(R.id.widget_media_stack, template)
-                val index = prefs.getInt("index_$id", 0).coerceIn(0, files.lastIndex)
-                views.setDisplayedChild(R.id.widget_media_stack, index)
-                manager.notifyAppWidgetViewDataChanged(id, R.id.widget_media_stack)
+                val videoFile = files.singleOrNull()?.takeIf { it.extension.equals("mp4", true) }
+                if (videoFile != null) {
+                    // Video is rendered into a full-size ImageView by the playback service.
+                    views.setViewVisibility(R.id.widget_media_stack, View.GONE)
+                    views.setViewVisibility(R.id.widget_media_image, View.VISIBLE)
+                    views.setImageViewBitmap(R.id.widget_media_image, null)
+                } else {
+                    // StackView provides native left/right swipe gestures for image collections.
+                    views.setViewVisibility(R.id.widget_media_image, View.GONE)
+                    views.setViewVisibility(R.id.widget_media_stack, View.VISIBLE)
+                    val service = Intent(context, MediaWidgetRemoteViewsService::class.java)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                        .setData(Uri.parse("content://space.swar4j.kosmos.widget/$id"))
+                    views.setRemoteAdapter(R.id.widget_media_stack, service)
+                    views.setEmptyView(R.id.widget_media_stack, R.id.widget_media_placeholder)
+                    val click = Intent(context, MediaWidgetActionsActivity::class.java)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    val template = PendingIntent.getActivity(context, id + 5000, click,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+                    views.setPendingIntentTemplate(R.id.widget_media_stack, template)
+                    views.setDisplayedChild(R.id.widget_media_stack, 0)
+                    manager.notifyAppWidgetViewDataChanged(id, R.id.widget_media_stack)
+                }
             }
             manager.updateAppWidget(id, views)
             scheduleAdvance(context, id)
@@ -254,6 +254,14 @@ class MediaWidgetProvider : AppWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context)
             manager.getAppWidgetIds(ComponentName(context, MediaWidgetProvider::class.java))
                 .forEach { update(context, manager, it) }
+            if (manager.getAppWidgetIds(ComponentName(context, MediaWidgetProvider::class.java)).any { id ->
+                context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
+                    .getString("video_$id", null) != null
+            }) {
+                androidx.core.content.ContextCompat.startForegroundService(
+                    context, Intent(context, MediaWidgetPlaybackService::class.java)
+                )
+            }
         }
     }
 }
@@ -616,8 +624,17 @@ class MediaWidgetPlaybackService : Service() {
                 }
                 val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 1000L
                 val timestampMs = (now - startedAt).coerceAtLeast(0L) % duration.coerceAtLeast(1L)
-                prefs.edit().putLong("video_frame_$id", timestampMs).apply()
-                manager.notifyAppWidgetViewDataChanged(id, R.id.widget_media_stack)
+                val frame = runCatching {
+                    retriever.getFrameAtTime(timestampMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
+                }.getOrNull()
+                if (frame != null) {
+                    val views = RemoteViews(packageName, R.layout.widget_media)
+                    views.setViewVisibility(R.id.widget_media_placeholder, View.GONE)
+                    views.setViewVisibility(R.id.widget_media_stack, View.GONE)
+                    views.setViewVisibility(R.id.widget_media_image, View.VISIBLE)
+                    views.setImageViewBitmap(R.id.widget_media_image, frame)
+                    manager.updateAppWidget(id, views)
+                }
 
             }
             if (!hasVideo) { stopSelf(); return }
