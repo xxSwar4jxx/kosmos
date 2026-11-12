@@ -13,10 +13,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.BlurMaskFilter
 import android.graphics.Color
 import android.content.res.Resources
 import android.widget.RemoteViewsService
@@ -178,7 +174,7 @@ class MediaWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences("arka_media_widgets", Context.MODE_PRIVATE)
             val dir = File(context.filesDir, "widget_media")
             val images = prefs.getStringSet("images_$id", emptySet()).orEmpty()
-                .map { File(dir, it) }.filter { it.isFile }
+                .sorted().map { File(dir, it) }.filter { it.isFile }
             val videoName = prefs.getString("video_$id", null)
             val video = videoName?.let { File(dir, it) }?.takeIf { it.isFile }
             return images + listOfNotNull(video)
@@ -293,52 +289,11 @@ class MediaWidgetFactory(private val context: Context, private val widgetId: Int
         if (bitmap != null) {
             // RemoteViews serializes the bitmap after getViewAt returns. Recycling it here
             // invalidates the image before the launcher can render the collection item.
-            val styled = styleFrame(bitmap, prefs)
-            views.setImageViewBitmap(R.id.widget_media_item_image, styled)
+            views.setImageViewBitmap(R.id.widget_media_item_image, bitmap)
         }
         views.setOnClickFillInIntent(R.id.widget_media_item_image,
             Intent().putExtra(MediaWidgetActionsActivity.EXTRA_SELECTED_FILE, file.name))
         return views
-    }
-    private fun styleFrame(source: Bitmap, prefs: android.content.SharedPreferences): Bitmap {
-        val width = source.width
-        val height = source.height
-        val border = prefs.getInt("border_width_$widgetId", 0).coerceIn(0, 20).toFloat()
-        val glow = prefs.getBoolean("glow_$widgetId", false)
-        val dynamic = prefs.getBoolean("dynamic_glow_$widgetId", true)
-        val selected = prefs.getInt("glow_color_$widgetId", Color.rgb(255,181,71))
-        val color = if (dynamic) {
-            var red=0L; var green=0L; var blue=0L; var count=0L
-            val inset = 3.coerceAtMost(minOf(width,height)/4)
-            for (x in inset until width-inset step maxOf(1,width/80)) {
-                for (y in listOf(inset, height-inset-1)) {
-                    val c=source.getPixel(x,y); red+=Color.red(c); green+=Color.green(c); blue+=Color.blue(c); count++
-                }
-            }
-            for (y in inset until height-inset step maxOf(1,height/80)) {
-                for (x in listOf(inset, width-inset-1)) {
-                    val c=source.getPixel(x,y); red+=Color.red(c); green+=Color.green(c); blue+=Color.blue(c); count++
-                }
-            }
-            if(count>0) Color.rgb((red/count).toInt(),(green/count).toInt(),(blue/count).toInt()) else selected
-        } else selected
-        if (border <= 0f && !glow) return source
-        val pad = (border + if (glow) 18f else 0f).toInt()
-        val output = Bitmap.createBitmap(width+pad*2,height+pad*2,Bitmap.Config.ARGB_8888)
-        val canvas=Canvas(output)
-        if(glow) {
-            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                this.color=color; style=Paint.Style.STROKE; strokeWidth=maxOf(3f,border+2f)
-                maskFilter=BlurMaskFilter(16f,BlurMaskFilter.Blur.NORMAL)
-            }
-            canvas.drawRoundRect(RectF(pad.toFloat(),pad.toFloat(),(pad+width).toFloat(),(pad+height).toFloat()),12f,12f,paint)
-        }
-        canvas.drawBitmap(source,pad.toFloat(),pad.toFloat(),Paint(Paint.ANTI_ALIAS_FLAG))
-        if(border>0) {
-            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color=selected; style=Paint.Style.STROKE; strokeWidth=border }
-            canvas.drawRoundRect(RectF(pad+border/2,pad+border/2,pad+width-border/2,pad+height-border/2),8f,8f,paint)
-        }
-        return output
     }
     override fun getLoadingView(): RemoteViews? = null
     override fun getViewTypeCount() = 1
@@ -409,10 +364,6 @@ class MediaWidgetActionsActivity : Activity() {
 class MediaWidgetConfigureActivity : Activity() {
     private lateinit var fpsPicker: Spinner
     private lateinit var intervalPicker: Spinner
-    private lateinit var borderPicker: Spinner
-    private lateinit var glowSwitch: android.widget.Switch
-    private lateinit var dynamicGlowSwitch: android.widget.Switch
-    private lateinit var glowColorPicker: Spinner
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -484,35 +435,6 @@ class MediaWidgetConfigureActivity : Activity() {
         intervalPicker.setSelection(intervalValues.indexOf(prefs.getLong("interval_$widgetId", 30000L)).coerceAtLeast(0))
         content.addView(intervalPicker)
         content.addView(TextView(this).apply {
-            text = "FRAME BORDER"
-            textSize = 12f
-            setTextColor(accent)
-            setPadding(0, 20, 0, 8)
-        })
-        borderPicker = Spinner(this)
-        val borderValues = listOf(0, 2, 4, 6, 8, 12)
-        borderPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, borderValues.map { "$it dp" })
-        borderPicker.setSelection(borderValues.indexOf(prefs.getInt("border_width_$widgetId", 0)).coerceAtLeast(0))
-        content.addView(borderPicker)
-        glowSwitch = android.widget.Switch(this).apply {
-            text = "Glow border"
-            setTextColor(foreground)
-            isChecked = prefs.getBoolean("glow_$widgetId", false)
-        }
-        content.addView(glowSwitch)
-        dynamicGlowSwitch = android.widget.Switch(this).apply {
-            text = "Dynamic glow (image edge colour)"
-            setTextColor(foreground)
-            isChecked = prefs.getBoolean("dynamic_glow_$widgetId", true)
-        }
-        content.addView(dynamicGlowSwitch)
-        glowColorPicker = Spinner(this)
-        val glowLabels = listOf("Amber", "White", "Blue", "Green", "Pink", "Purple")
-        glowColorPicker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, glowLabels)
-        val glowColors = listOf(Color.rgb(255,181,71), Color.WHITE, Color.rgb(80,160,255), Color.rgb(100,220,150), Color.rgb(255,120,170), Color.rgb(180,120,255))
-        glowColorPicker.setSelection(glowColors.indexOf(prefs.getInt("glow_color_$widgetId", glowColors[0])).coerceAtLeast(0))
-        content.addView(glowColorPicker)
-        content.addView(TextView(this).apply {
             text = "Higher frame rates may use more battery and launcher resources."
             textSize = 12f
             setTextColor(foreground)
@@ -547,15 +469,9 @@ class MediaWidgetConfigureActivity : Activity() {
     private fun saveSettings() {
         val fps = listOf(8, 12, 16, 24, 30)[fpsPicker.selectedItemPosition]
         val intervals = listOf(10000L, 30000L, 60000L, 120000L, 300000L, 600000L, 1800000L, 86400000L)
-        val borders = listOf(0, 2, 4, 6, 8, 12)
-        val colors = listOf(Color.rgb(255,181,71), Color.WHITE, Color.rgb(80,160,255), Color.rgb(100,220,150), Color.rgb(255,120,170), Color.rgb(180,120,255))
         getSharedPreferences("arka_media_widgets", MODE_PRIVATE).edit()
             .putInt("fps_$widgetId", fps)
             .putLong("interval_$widgetId", intervals[intervalPicker.selectedItemPosition])
-            .putInt("border_width_$widgetId", borders[borderPicker.selectedItemPosition])
-            .putBoolean("glow_$widgetId", glowSwitch.isChecked)
-            .putBoolean("dynamic_glow_$widgetId", dynamicGlowSwitch.isChecked)
-            .putInt("glow_color_$widgetId", colors[glowColorPicker.selectedItemPosition])
             .apply()
         MediaWidgetProvider.update(this, AppWidgetManager.getInstance(this), widgetId)
         val currentName = getSharedPreferences("arka_media_widgets", MODE_PRIVATE).getString("video_$widgetId", null)
