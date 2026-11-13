@@ -39,7 +39,6 @@
         <activity android:name=".MediaWidgetConfigureActivity" android:exported="true" />
         <activity android:name=".MediaWidgetActionsActivity" android:exported="false" />
         <activity android:name=".MediaWidgetManageActivity" android:exported="false" />
-        <service android:name=".MediaWidgetRemoteViewsService" android:permission="android.permission.BIND_REMOTEVIEWS" android:exported="false" />
         <activity android:name=".MediaWidgetViewerActivity" android:exported="false" />
         <service android:name=".MediaWidgetPlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
 
