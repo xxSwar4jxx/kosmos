@@ -87,6 +87,7 @@ class PresetsWidgetProvider : AppWidgetProvider() {
                 "system" -> Triple(0xFF15171C.toInt(), 0xFF24262D.toInt(), 0xFFFFE9C7.toInt())
                 else -> Triple(0xFF15171C.toInt(), 0xFF24262D.toInt(), 0xFFFFE9C7.toInt())
             }
+            val views = RemoteViews(context.packageName, R.layout.widget_presets)
             views.setInt(R.id.widget_presets_root, "setBackgroundColor", surfaceColor)
             views.setTextColor(R.id.widget_preset_title, textColor)
             views.setTextColor(R.id.widget_preset_empty, textColor)
